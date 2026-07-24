@@ -1,24 +1,24 @@
 # API Standards
 
-## Objetivo
+## Objective
 
-Definir padrões obrigatórios para desenvolvimento e evolução da FNBR API.
+Define mandatory standards for the development and evolution of the FNBR API.
 
-Todos os módulos, serviços, controllers e integrações devem seguir este documento.
+All modules, services, controllers, and integrations must comply with this document.
 
 ---
 
-# Versionamento
+# Versioning
 
-Toda rota deve possuir versionamento.
+Every endpoint must be versioned.
 
-Formato:
+Format:
 
 ```text
 /api/v1
 ```
 
-Exemplos:
+Examples:
 
 ```text
 /api/v1/users
@@ -29,15 +29,15 @@ Exemplos:
 
 ---
 
-# Convenção de URLs
+# URL Naming Convention
 
-Utilizar:
+Use:
 
 ```text
 kebab-case
 ```
 
-Exemplos:
+Examples:
 
 ```text
 /users
@@ -49,7 +49,7 @@ Exemplos:
 /restricted-content-rules
 ```
 
-Não utilizar:
+Do not use:
 
 ```text
 /rewardPrograms
@@ -59,15 +59,15 @@ Não utilizar:
 
 ---
 
-# Convenção JSON
+# JSON Naming Convention
 
-Utilizar:
+Use:
 
 ```text
 snake_case
 ```
 
-Exemplo:
+Example:
 
 ```json
 {
@@ -77,7 +77,7 @@ Exemplo:
 }
 ```
 
-Não utilizar:
+Do not use:
 
 ```json
 {
@@ -104,11 +104,11 @@ Content-Type: application/json
 
 ---
 
-# Autenticação
+# Authentication
 
-A API utiliza API Key.
+The API uses API Key authentication.
 
-Header obrigatório:
+Required header:
 
 ```http
 X-API-Key: your-api-key
@@ -116,9 +116,9 @@ X-API-Key: your-api-key
 
 ---
 
-# Consumidores da API
+# API Consumers
 
-Consumidores previstos:
+Expected consumers:
 
 ```text
 fnbr-bot-guarda
@@ -132,9 +132,9 @@ fnbr-public-html
 
 ---
 
-# Autorização
+# Authorization
 
-Após autenticação, a API deve validar permissões utilizando:
+After authentication, the API must validate permissions using:
 
 ```text
 USER
@@ -144,7 +144,7 @@ ADMIN
 SUPER_ADMIN
 ```
 
-conforme definido em:
+as defined in:
 
 ```text
 permissions.md
@@ -152,9 +152,9 @@ permissions.md
 
 ---
 
-# Formato de Resposta
+# Response Format
 
-## Sucesso
+## Success
 
 ```json
 {
@@ -165,69 +165,69 @@ permissions.md
 
 ---
 
-## Erro
+## Error
 
 ```json
 {
   "success": false,
   "error": {
     "code": "ERROR_CODE",
-    "message": "Human readable message"
+    "message": "Human-readable message"
   }
 }
 ```
 
 ---
 
-# Status Codes
+# HTTP Status Codes
 
 ## 200 OK
 
-Consulta executada com sucesso.
+Request completed successfully.
 
 ---
 
 ## 201 Created
 
-Registro criado com sucesso.
+Resource created successfully.
 
 ---
 
 ## 204 No Content
 
-Operação executada sem conteúdo de retorno.
+Operation completed successfully with no response body.
 
 ---
 
 ## 400 Bad Request
 
-Dados inválidos.
+Invalid request data.
 
 ---
 
 ## 401 Unauthorized
 
-API Key inválida ou ausente.
+Missing or invalid API Key.
 
 ---
 
 ## 403 Forbidden
 
-Permissão insuficiente.
+Insufficient permissions.
 
 ---
 
 ## 404 Not Found
 
-Recurso não encontrado.
+Resource not found.
 
 ---
 
 ## 409 Conflict
 
-Violação de regra de negócio.
+Business rule violation.
 
-Exemplos:
+Examples:
 
 ```text
 MEMBERSHIP_ALREADY_EXISTS
@@ -241,15 +241,15 @@ MUTE_ALREADY_ACTIVE
 
 ## 500 Internal Server Error
 
-Erro inesperado.
+Unexpected server error.
 
 ---
 
-# Datas
+# Date and Time Format
 
-Todas as datas devem utilizar ISO-8601.
+All date and time values must use the ISO 8601 standard.
 
-Exemplo:
+Example:
 
 ```text
 2026-01-01T15:30:00Z
@@ -257,9 +257,9 @@ Exemplo:
 
 ---
 
-# Identificadores
+# Identifiers
 
-Todos os IDs internos devem ser retornados como:
+All internal IDs must be returned as:
 
 ```json
 {
@@ -277,9 +277,9 @@ Telegram IDs:
 
 ---
 
-# Paginação
+# Pagination
 
-Formato padrão:
+Standard format:
 
 Request:
 
@@ -304,16 +304,16 @@ Response:
 
 ---
 
-# Ordenação
+# Sorting
 
-Formato padrão:
+Standard format:
 
 ```text
 ?sort_by=created_at
 &sort_order=desc
 ```
 
-Valores:
+Allowed values:
 
 ```text
 asc
@@ -322,9 +322,9 @@ desc
 
 ---
 
-# Filtros
+# Filtering
 
-Formato padrão:
+Standard format:
 
 ```text
 ?status=open
@@ -338,28 +338,28 @@ Formato padrão:
 
 # Logging
 
-A API deve registrar:
+The API must log:
 
-* autenticação
-* erros
-* operações administrativas
-* falhas de integração
+* authentication
+* errors
+* administrative operations
+* integration failures
 
-Não registrar:
+Do not log:
 
-* API Keys
+* API keys
 * tokens
-* informações sensíveis
+* sensitive information
 
 ---
 
-# Banco de Dados
+# Database
 
-A API é a única aplicação autorizada a acessar o banco.
+The API is the only application authorized to access the database.
 
-Bots não acessam o banco diretamente.
+Bots must not access the database directly.
 
-Fluxo obrigatório:
+Required flow:
 
 ```text
 Bot
@@ -375,37 +375,37 @@ Database
 
 ---
 
-# Integrações Telegram
+# Telegram Integrations
 
-Telegram é a fonte de verdade para:
+Telegram is the source of truth for:
 
-* participação atual em grupos
-* participação atual em canais
+* current group membership
+* current channel membership
 
-O banco é fonte de verdade para:
+The database is the source of truth for:
 
-* histórico
-* assinaturas
-* sorteios
-* moderação
-* benefícios
+* history
+* subscriptions
+* giveaways
+* moderation
+* benefits
 
 ---
 
-# Compatibilidade
+# Backward Compatibility
 
-Mudanças incompatíveis exigem:
+Breaking changes require:
 
 ```text
 /api/v2
 ```
 
-Mudanças compatíveis permanecem na mesma versão.
+Backward-compatible changes remain within the same API version.
 
 ---
 
-# Regra Principal
+# Primary Rule
 
-Toda regra de negócio deve ser implementada na API.
+All business rules must be implemented within the API.
 
-Bots devem permanecer simples e delegar decisões para a API.
+Bots must remain lightweight and delegate all business decisions to the API.
