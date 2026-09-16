@@ -1,0 +1,55 @@
+# VIP subscription and benefit management endpoints.
+/vips:
+  get:
+    summary: Lists VIP Club subscribers.
+    tags:
+    - VIPs
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/vipMember.yaml#/VipMember
+/vips/{memberId}:
+  put:
+    summary: Updates the VIP base plan, daily promotion limit, and expiration date.
+    tags:
+    - VIPs
+    parameters:
+    - in: path
+      name: memberId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/vipPlanUpdate.yaml#/VipPlanUpdate
+    responses:
+      '200':
+        description: Plan updated successfully.
+/vips/{memberId}/benefits:
+  patch:
+    summary: Enables or disables individual benefits (tags, bypass, etc.).
+    tags:
+    - VIPs
+    parameters:
+    - in: path
+      name: memberId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/vipBenefitPatch.yaml#/VipBenefitPatch
+    responses:
+      '200':
+        description: Benefit updated successfully.

@@ -1,0 +1,5 @@
+# Shared authentication schemes used across the API.
+bearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: JWT

@@ -1,0 +1,85 @@
+# Technical path aggregator used by the root OpenAPI document.
+paths:
+  /auth/telegram:
+    $ref: ./auth/paths/authentication.yaml#/~1auth~1telegram
+
+  /auth/me:
+    $ref: ./auth/paths/session.yaml#/~1auth~1me
+
+  /groups:
+    $ref: ./groups/paths/groups.yaml#/~1groups
+
+  /groups/{groupId}:
+    $ref: ./groups/paths/groups.yaml#/~1groups~1{groupId}
+
+  /groups/channels/available:
+    $ref: ./groups/paths/groups.yaml#/~1groups~1channels~1available
+
+  /groups/{groupId}/config:
+    $ref: ./groups/paths/configuration.yaml#/~1groups~1{groupId}~1config
+
+  /groups/{groupId}/blacklist:
+    $ref: ./groups/paths/blacklist.yaml#/~1groups~1{groupId}~1blacklist
+
+  /groups/{groupId}/blacklist/{itemId}:
+    $ref: ./groups/paths/blacklist.yaml#/~1groups~1{groupId}~1blacklist~1{itemId}
+
+  /groups/{groupId}/moderation-bots:
+    $ref: ./groups/paths/moderation-bots.yaml#/~1groups~1{groupId}~1moderation-bots
+
+  /groups/{groupId}/moderation-bots/{botId}/status:
+    $ref: ./groups/paths/moderation-bots.yaml#/~1groups~1{groupId}~1moderation-bots~1{botId}~1status
+
+  /groups/{groupId}/moderation-bots/{botId}/config:
+    $ref: ./groups/paths/moderation-bots.yaml#/~1groups~1{groupId}~1moderation-bots~1{botId}~1config
+
+  /groups/{groupId}/moderation-bots/{botId}/topics:
+    $ref: ./groups/paths/topics.yaml#/~1groups~1{groupId}~1moderation-bots~1{botId}~1topics
+
+  /groups/{groupId}/moderation-bots/{botId}/topics/{topicId}:
+    $ref: ./groups/paths/topics.yaml#/~1groups~1{groupId}~1moderation-bots~1{botId}~1topics~1{topicId}
+
+  /groups/modes:
+    $ref: ./groups/paths/modes.yaml#/~1groups~1modes
+
+  /members:
+    $ref: ./members/paths/members.yaml#/~1members
+
+  /members/{memberId}:
+    $ref: ./members/paths/members.yaml#/~1members~1{memberId}
+
+  /members/{memberId}/timeline:
+    $ref: ./members/paths/timeline.yaml#/~1members~1{memberId}~1timeline
+
+  /members/{memberId}/notes:
+    $ref: ./members/paths/notes.yaml#/~1members~1{memberId}~1notes
+
+  /members/{memberId}/notes/{noteId}:
+    $ref: ./members/paths/notes.yaml#/~1members~1{memberId}~1notes~1{noteId}
+
+  /members/{memberId}/actions:
+    $ref: ./members/paths/moderation.yaml#/~1members~1{memberId}~1actions
+
+  /vips:
+    $ref: ./vips/paths/vips.yaml#/~1vips
+
+  /vips/{memberId}:
+    $ref: ./vips/paths/vips.yaml#/~1vips~1{memberId}
+
+  /vips/{memberId}/benefits:
+    $ref: ./vips/paths/vips.yaml#/~1vips~1{memberId}~1benefits
+
+  /announcements:
+    $ref: ./announcements/paths/announcements.yaml#/~1announcements
+
+  /announcements/{id}:
+    $ref: ./announcements/paths/announcements.yaml#/~1announcements~1{id}
+
+  /giveaways:
+    $ref: ./giveaways/paths/giveaways.yaml#/~1giveaways
+
+  /giveaways/{id}:
+    $ref: ./giveaways/paths/giveaways.yaml#/~1giveaways~1{id}
+
+  /giveaways/{id}/draw:
+    $ref: ./giveaways/paths/giveaways.yaml#/~1giveaways~1{id}~1draw

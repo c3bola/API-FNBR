@@ -1,0 +1,26 @@
+# Telegram authentication endpoint.
+/auth/telegram:
+  post:
+    summary: Authenticates the administrator using the Telegram Login Widget.
+    tags:
+    - Auth
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/telegramAuthPayload.yaml#/TelegramAuthPayload
+    responses:
+      '200':
+        description: Authentication successful. Returns the JWT token.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                admin:
+                  $ref: ../../members/schemas/member.yaml#/Member
+      '401':
+        description: Invalid Telegram hash or unauthorized user.

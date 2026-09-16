@@ -1,0 +1,169 @@
+# Core group lifecycle and group metadata endpoints.
+/groups:
+  get:
+    summary: Lists all groups monitored by the bots.
+    tags:
+      - Groups
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/groupSummary.yaml#/GroupSummary
+
+  post:
+    summary: Creates a new group in the community.
+    tags:
+      - Groups
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - platformId
+              - name
+              - isOfficial
+              - type
+              - visibility
+            properties:
+              platformId:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+                nullable: true
+              isOfficial:
+                type: boolean
+              isVip:
+                type: boolean
+                default: false
+              coverImageUrl:
+                type: string
+                nullable: true
+              iconName:
+                type: string
+                default: Users
+              mode:
+                type: string
+                default: Geral
+              themeColor:
+                type: string
+                default: '#9333ea'
+              type:
+                type: string
+                enum:
+                  - group
+                  - channel
+                default: group
+              visibility:
+                type: string
+                enum:
+                  - public
+                  - private
+                  - restricted
+                default: public
+              language:
+                type: string
+                default: pt-BR
+    responses:
+      '201':
+        description: Group created successfully.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/groupSummary.yaml#/GroupSummary
+
+/groups/{groupId}:
+  get:
+    summary: Gets detailed data for a specific group.
+    tags:
+      - Groups
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/groupDetail.yaml#/GroupDetail
+
+  put:
+    summary: Updates the general group data in a single request.
+    description: >-
+      Updates the general group data. `isForum: true` cannot be sent together with `isLinkedToChannel: true` or a populated `linkedChannelId`.
+    tags:
+      - Groups
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/updateGroupRequest.yaml#/UpdateGroupRequest
+    responses:
+      '200':
+        description: Group updated successfully.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/groupDetail.yaml#/GroupDetail
+
+  delete:
+    summary: Deactivates/removes a group from the community (soft delete)
+    description: Marks the group status as inactive, removes channel links, and releases associated resources.
+    tags:
+      - Groups
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: groupId
+        required: true
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Group deactivated successfully. No content is returned.
+      '404':
+        description: Group not found.
+      '500':
+        description: Internal error while deactivating the group.
+
+/groups/channels/available:
+  get:
+    summary: Lists channels available for linking.
+    tags:
+      - Groups
+    security:
+      - bearerAuth: []
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/availableChannel.yaml#/AvailableChannel

@@ -1,0 +1,12 @@
+# Single navigation item returned to the client.
+NavItem:
+  type: object
+  properties:
+    label:
+      type: string
+    icon:
+      type: string
+    route:
+      type: string
+    permission:
+      type: string

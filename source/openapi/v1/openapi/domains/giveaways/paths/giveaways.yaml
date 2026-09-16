@@ -1,0 +1,56 @@
+# Giveaway creation, removal, and drawing endpoints.
+/giveaways:
+  get:
+    summary: Lists all giveaways (active and completed).
+    tags:
+    - Giveaways
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/giveaway.yaml#/Giveaway
+  post:
+    summary: Creates a new giveaway and publishes its preview on Telegram.
+    tags:
+    - Giveaways
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/newGiveaway.yaml#/NewGiveaway
+    responses:
+      '201':
+        description: Giveaway created successfully.
+/giveaways/{id}:
+  delete:
+    summary: Removes a giveaway (deleting the Telegram message when applicable).
+    tags:
+    - Giveaways
+    parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    responses:
+      '204':
+        description: Giveaway removed.
+/giveaways/{id}/draw:
+  post:
+    summary: Runs the giveaway and immediately selects the winners.
+    tags:
+    - Giveaways
+    parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Giveaway completed. Notifications sent to the winners.

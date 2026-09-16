@@ -1,0 +1,24 @@
+# Members domain aggregator.
+paths:
+  /members:
+    $ref: ./paths/members.yaml#/~1members
+  /members/{memberId}:
+    $ref: ./paths/members.yaml#/~1members~1{memberId}
+  /members/{memberId}/timeline:
+    $ref: ./paths/timeline.yaml#/~1members~1{memberId}~1timeline
+  /members/{memberId}/notes:
+    $ref: ./paths/notes.yaml#/~1members~1{memberId}~1notes
+  /members/{memberId}/notes/{noteId}:
+    $ref: ./paths/notes.yaml#/~1members~1{memberId}~1notes~1{noteId}
+  /members/{memberId}/actions:
+    $ref: ./paths/moderation.yaml#/~1members~1{memberId}~1actions
+components:
+  schemas:
+    Member:
+      $ref: ./schemas/member.yaml#/Member
+    TimelineEvent:
+      $ref: ./schemas/timelineEvent.yaml#/TimelineEvent
+    StaffNote:
+      $ref: ./schemas/staffNote.yaml#/StaffNote
+    ModerationAction:
+      $ref: ./schemas/moderationAction.yaml#/ModerationAction

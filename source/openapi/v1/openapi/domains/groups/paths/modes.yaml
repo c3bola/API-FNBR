@@ -1,0 +1,22 @@
+# Available group destination modes.
+/groups/modes:
+  get:
+    summary: Lists the available destination modes for groups.
+    tags:
+    - Groups
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string

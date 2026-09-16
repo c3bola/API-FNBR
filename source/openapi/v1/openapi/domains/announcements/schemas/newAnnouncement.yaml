@@ -1,0 +1,18 @@
+# Payload used to create or schedule an announcement.
+NewAnnouncement:
+  type: object
+  properties:
+    title:
+      type: string
+    content:
+      type: string
+    schedule:
+      type: boolean
+    scheduleDate:
+      type: string
+      format: date-time
+      nullable: true
+    targetIds:
+      type: array
+      items:
+        type: string

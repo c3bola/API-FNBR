@@ -1,0 +1,27 @@
+# Main OpenAPI entrypoint. Keep domain contracts in their respective domain folders.
+openapi: 3.0.0
+info:
+  title: Fortnite Brasil Admin API
+  description: Management API for the Fortnite Brasil Telegram bot, group, and member ecosystem.
+  version: 1.2.0
+servers:
+- url: http://localhost:3000/api/v1
+  description: Development Server
+tags:
+- name: Groups
+  description: Group management and global configuration
+- name: Members
+  description: Community member lookup and moderation
+- name: VIPs
+  description: VIP Club subscription management
+- name: Announcements
+  description: Bulk announcement delivery and scheduling
+- name: Giveaways
+  description: Automated giveaway creation and execution
+paths:
+  $ref: ./domains/all-paths.yaml#/paths
+components:
+  securitySchemes:
+    $ref: ./components/security.yaml
+  schemas:
+    $ref: ./domains/all-schemas.yaml#/schemas

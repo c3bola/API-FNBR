@@ -1,0 +1,20 @@
+# Authentication domain aggregator.
+paths:
+  /auth/telegram:
+    $ref: ./paths/authentication.yaml#/~1auth~1telegram
+  /auth/me:
+    $ref: ./paths/session.yaml#/~1auth~1me
+components:
+  schemas:
+    TelegramAuthPayload:
+      $ref: ./schemas/telegramAuthPayload.yaml#/TelegramAuthPayload
+    SessionContext:
+      $ref: ./schemas/sessionContext.yaml#/SessionContext
+    UserContext:
+      $ref: ./schemas/userContext.yaml#/UserContext
+    BotAccess:
+      $ref: ./schemas/botAccess.yaml#/BotAccess
+    NavSection:
+      $ref: ./schemas/navSection.yaml#/NavSection
+    NavItem:
+      $ref: ./schemas/navItem.yaml#/NavItem

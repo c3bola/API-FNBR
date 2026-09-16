@@ -1,0 +1,13 @@
+# Payload used to create a blacklist entry.
+NewBlacklistItem:
+  type: object
+  properties:
+    type:
+      type: string
+      # Existing blacklist type literals are preserved for backend compatibility.
+      enum:
+      - url
+      - palavra
+      - id_usuario
+    value:
+      type: string

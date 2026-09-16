@@ -1,0 +1,12 @@
+# Announcements domain aggregator.
+paths:
+  /announcements:
+    $ref: ./paths/announcements.yaml#/~1announcements
+  /announcements/{id}:
+    $ref: ./paths/announcements.yaml#/~1announcements~1{id}
+components:
+  schemas:
+    Announcement:
+      $ref: ./schemas/announcement.yaml#/Announcement
+    NewAnnouncement:
+      $ref: ./schemas/newAnnouncement.yaml#/NewAnnouncement

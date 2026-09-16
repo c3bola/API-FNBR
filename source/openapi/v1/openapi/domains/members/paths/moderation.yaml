@@ -1,0 +1,21 @@
+# Member moderation action endpoint.
+/members/{memberId}/actions:
+  post:
+    summary: Executes a disciplinary action (Warn, Mute, Ban) directly on Telegram.
+    tags:
+    - Members
+    parameters:
+    - in: path
+      name: memberId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/moderationAction.yaml#/ModerationAction
+    responses:
+      '200':
+        description: Disciplinary action applied successfully.

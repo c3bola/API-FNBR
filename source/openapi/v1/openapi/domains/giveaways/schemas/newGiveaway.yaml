@@ -1,0 +1,24 @@
+# Payload used to create a giveaway.
+NewGiveaway:
+  type: object
+  properties:
+    title:
+      type: string
+    date:
+      type: string
+      format: date
+    type:
+      type: string
+      # Existing giveaway type literals are preserved for backend compatibility.
+      enum:
+      - Mensal
+      - Especial
+      - Relâmpago
+    value:
+      type: string
+    description:
+      type: string
+    winnersCount:
+      type: integer
+    imageBase64:
+      type: string

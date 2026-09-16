@@ -1,0 +1,9 @@
+# Payload used to create a Telegram forum topic.
+TopicCreateRequest:
+  type: object
+  required:
+  - name
+  properties:
+    name:
+      type: string
+      description: Name of the new topic

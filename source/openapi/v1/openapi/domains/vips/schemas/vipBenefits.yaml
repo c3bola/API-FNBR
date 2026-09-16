@@ -1,0 +1,14 @@
+# Available VIP benefit flags.
+VipBenefits:
+  type: object
+  properties:
+    acoesPromocionais:
+      type: boolean
+    tagCustomizada:
+      type: boolean
+    bypassSlowMode:
+      type: boolean
+    falarGrupoFechado:
+      type: boolean
+    opinarDecisoes:
+      type: boolean

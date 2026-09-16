@@ -1,0 +1,42 @@
+# Announcement creation, scheduling, and removal endpoints.
+/announcements:
+  get:
+    summary: Lists sent, draft, and scheduled announcements.
+    tags:
+    - Announcements
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/announcement.yaml#/Announcement
+  post:
+    summary: Creates and sends (or schedules) a new announcement for selected targets.
+    tags:
+    - Announcements
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/newAnnouncement.yaml#/NewAnnouncement
+    responses:
+      '201':
+        description: Announcement registered for delivery.
+/announcements/{id}:
+  delete:
+    summary: Cancels a scheduled announcement or deletes a draft.
+    tags:
+    - Announcements
+    parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    responses:
+      '204':
+        description: Announcement removed.

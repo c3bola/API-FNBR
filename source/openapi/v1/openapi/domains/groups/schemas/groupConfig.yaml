@@ -1,0 +1,56 @@
+# Group moderation, anti-spam, and message configuration.
+GroupConfig:
+  type: object
+  properties:
+    botStatus:
+      type: boolean
+    antiSpam:
+      type: boolean
+    antiLinks:
+      type: boolean
+    antiFlood:
+      type: boolean
+    antiCaps:
+      type: boolean
+    detectRusso:
+      type: boolean
+    detectArabe:
+      type: boolean
+    detectOriental:
+      type: boolean
+    warnLimit:
+      type: integer
+    banType:
+      type: string
+      # Existing moderation literals are preserved for backend compatibility.
+      # Enum values are preserved for API compatibility with the existing backend.
+      enum:
+      - permanente
+      - temporario
+    banTimeHours:
+      type: integer
+      nullable: true
+    preWarnAction:
+      type: string
+      enum:
+      - nada
+      - silenciar_perm
+      - silenciar_temp
+    muteTimeHours:
+      type: integer
+      nullable: true
+    messages:
+      type: object
+      properties:
+        description:
+          type: string
+        welcome:
+          type: string
+        welcomeNight:
+          type: string
+        exit:
+          type: string
+        warn:
+          type: string
+        ban:
+          type: string

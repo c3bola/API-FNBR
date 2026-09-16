@@ -1,0 +1,15 @@
+# Disciplinary action requested for a community member.
+ModerationAction:
+  type: object
+  properties:
+    actionType:
+      type: string
+      enum:
+      - warn
+      - mute
+      - ban
+    reason:
+      type: string
+    durationHours:
+      type: integer
+      nullable: true

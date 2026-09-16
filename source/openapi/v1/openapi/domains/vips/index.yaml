@@ -1,0 +1,18 @@
+# VIP subscription domain aggregator.
+paths:
+  /vips:
+    $ref: ./paths/vips.yaml#/~1vips
+  /vips/{memberId}:
+    $ref: ./paths/vips.yaml#/~1vips~1{memberId}
+  /vips/{memberId}/benefits:
+    $ref: ./paths/vips.yaml#/~1vips~1{memberId}~1benefits
+components:
+  schemas:
+    VipMember:
+      $ref: ./schemas/vipMember.yaml#/VipMember
+    VipBenefits:
+      $ref: ./schemas/vipBenefits.yaml#/VipBenefits
+    VipPlanUpdate:
+      $ref: ./schemas/vipPlanUpdate.yaml#/VipPlanUpdate
+    VipBenefitPatch:
+      $ref: ./schemas/vipBenefitPatch.yaml#/VipBenefitPatch

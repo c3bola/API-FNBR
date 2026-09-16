@@ -1,0 +1,12 @@
+# Payload used to change the state of a Telegram forum topic.
+TopicPatchRequest:
+  type: object
+  required:
+  - action
+  properties:
+    action:
+      type: string
+      enum:
+      - close
+      - reopen
+      description: Action to execute on the topic

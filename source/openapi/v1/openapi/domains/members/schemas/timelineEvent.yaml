@@ -1,0 +1,22 @@
+# Member activity timeline event.
+TimelineEvent:
+  type: object
+  properties:
+    id:
+      type: string
+    type:
+      type: string
+      enum:
+      - warn
+      - mute
+      - ban
+      - command
+      - bot
+      - group
+    title:
+      type: string
+    description:
+      type: string
+    date:
+      type: string
+      format: date-time

@@ -1,0 +1,110 @@
+# Moderation bot status and configuration endpoints.
+/groups/{groupId}/moderation-bots:
+  get:
+    summary: Lists available moderation bots and their link status for the group.
+    tags:
+    - Groups
+    - Moderation
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/moderationBotStatus.yaml#/ModerationBotStatus
+/groups/{groupId}/moderation-bots/{botId}/status:
+  put:
+    summary: Enables or disables monitoring for a specific bot in the group.
+    tags:
+    - Groups
+    - Moderation
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: botId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - isEnabled
+            properties:
+              isEnabled:
+                type: boolean
+    responses:
+      '200':
+        description: Status updated successfully.
+/groups/{groupId}/moderation-bots/{botId}/config:
+  get:
+    summary: Gets the bot moderation settings (JSON) for the group.
+    tags:
+    - Groups
+    - Moderation
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: botId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+  put:
+    summary: Updates the bot moderation settings (JSON) for the group.
+    tags:
+    - Groups
+    - Moderation
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: botId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+    responses:
+      '200':
+        description: Configuration updated.

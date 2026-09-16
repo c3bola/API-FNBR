@@ -1,0 +1,85 @@
+# Technical schema aggregator used by the root OpenAPI document.
+schemas:
+  TelegramAuthPayload:
+    $ref: ./auth/schemas/telegramAuthPayload.yaml#/TelegramAuthPayload
+
+  SessionContext:
+    $ref: ./auth/schemas/sessionContext.yaml#/SessionContext
+
+  UserContext:
+    $ref: ./auth/schemas/userContext.yaml#/UserContext
+
+  BotAccess:
+    $ref: ./auth/schemas/botAccess.yaml#/BotAccess
+
+  NavSection:
+    $ref: ./auth/schemas/navSection.yaml#/NavSection
+
+  NavItem:
+    $ref: ./auth/schemas/navItem.yaml#/NavItem
+
+  GroupSummary:
+    $ref: ./groups/schemas/groupSummary.yaml#/GroupSummary
+
+  GroupDetail:
+    $ref: ./groups/schemas/groupDetail.yaml#/GroupDetail
+
+  UpdateGroupRequest:
+    $ref: ./groups/schemas/updateGroupRequest.yaml#/UpdateGroupRequest
+
+  AvailableChannel:
+    $ref: ./groups/schemas/availableChannel.yaml#/AvailableChannel
+
+  GroupConfig:
+    $ref: ./groups/schemas/groupConfig.yaml#/GroupConfig
+
+  ModerationBotStatus:
+    $ref: ./groups/schemas/moderationBotStatus.yaml#/ModerationBotStatus
+
+  TopicCreateRequest:
+    $ref: ./groups/schemas/topicCreateRequest.yaml#/TopicCreateRequest
+
+  TopicPatchRequest:
+    $ref: ./groups/schemas/topicPatchRequest.yaml#/TopicPatchRequest
+
+  BlacklistItem:
+    $ref: ./groups/schemas/blacklistItem.yaml#/BlacklistItem
+
+  NewBlacklistItem:
+    $ref: ./groups/schemas/newBlacklistItem.yaml#/NewBlacklistItem
+
+  Member:
+    $ref: ./members/schemas/member.yaml#/Member
+
+  TimelineEvent:
+    $ref: ./members/schemas/timelineEvent.yaml#/TimelineEvent
+
+  StaffNote:
+    $ref: ./members/schemas/staffNote.yaml#/StaffNote
+
+  ModerationAction:
+    $ref: ./members/schemas/moderationAction.yaml#/ModerationAction
+
+  VipMember:
+    $ref: ./vips/schemas/vipMember.yaml#/VipMember
+
+  VipBenefits:
+    $ref: ./vips/schemas/vipBenefits.yaml#/VipBenefits
+
+  VipPlanUpdate:
+    $ref: ./vips/schemas/vipPlanUpdate.yaml#/VipPlanUpdate
+
+  VipBenefitPatch:
+    $ref: ./vips/schemas/vipBenefitPatch.yaml#/VipBenefitPatch
+
+  Announcement:
+    $ref: ./announcements/schemas/announcement.yaml#/Announcement
+
+  NewAnnouncement:
+    $ref: ./announcements/schemas/newAnnouncement.yaml#/NewAnnouncement
+
+  Giveaway:
+    $ref: ./giveaways/schemas/giveaway.yaml#/Giveaway
+
+  NewGiveaway:
+    $ref: ./giveaways/schemas/newGiveaway.yaml#/NewGiveaway

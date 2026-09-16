@@ -1,0 +1,13 @@
+# Internal note associated with a community member.
+StaffNote:
+  type: object
+  properties:
+    id:
+      type: string
+    author:
+      type: string
+    text:
+      type: string
+    date:
+      type: string
+      format: date-time

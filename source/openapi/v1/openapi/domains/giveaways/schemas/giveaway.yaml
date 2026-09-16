@@ -1,0 +1,44 @@
+# Giveaway representation.
+Giveaway:
+  type: object
+  properties:
+    id:
+      type: string
+    title:
+      type: string
+    type:
+      type: string
+      # Existing giveaway type literals are preserved for backend compatibility.
+      enum:
+      - Mensal
+      - Especial
+      - Relâmpago
+    value:
+      type: string
+    description:
+      type: string
+    date:
+      type: string
+      format: date
+    status:
+      type: string
+      enum:
+      - Ativo
+      - Finalizado
+    winnersCount:
+      type: integer
+    participants:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          name:
+            type: string
+          username:
+            type: string
+          avatar:
+            type: string
+          isWinner:
+            type: boolean

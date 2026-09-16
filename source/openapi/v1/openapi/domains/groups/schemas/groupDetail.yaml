@@ -1,0 +1,82 @@
+# Detailed group representation returned by the group detail endpoint.
+GroupDetail:
+  type: object
+  required:
+    - isLinkedToChannel
+  properties:
+    id:
+      type: string
+    platformId:
+      type: string
+    name:
+      type: string
+    description:
+      type: string
+      nullable: true
+    coverImageUrl:
+      type: string
+      nullable: true
+    iconName:
+      type: string
+      nullable: true
+    themeColor:
+      type: string
+      nullable: true
+    badgeText:
+      type: string
+      nullable: true
+    badgeColor:
+      type: string
+      nullable: true
+    memberCount:
+      type: integer
+    onlineCount:
+      type: integer
+    isOfficial:
+      type: boolean
+    isVip:
+      type: boolean
+    language:
+      type: string
+      nullable: true
+    mode:
+      type: string
+      nullable: true
+    type:
+      type: string
+      enum:
+        - group
+        - channel
+    visibility:
+      type: string
+      enum:
+        - public
+        - private
+        - restricted
+    botActive:
+      type: boolean
+    createdAt:
+      type: string
+      format: date-time
+    isLinkedToChannel:
+      type: boolean
+      description: Indicates whether the group has an associated channel in the tb_comunidade_vinculo join table.
+    linkedChannelId:
+      type: string
+      format: uuid
+      nullable: true
+      description: Community ID of the linked channel, if one exists.
+    moderatorBot:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        iconName:
+          type: string
+          nullable: true
+        themeColor:
+          type: string
+          nullable: true

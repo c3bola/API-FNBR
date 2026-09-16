@@ -1,0 +1,16 @@
+# Bot access granted to the authenticated administrator.
+BotAccess:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    category:
+      type: string
+    status:
+      type: string
+    is_active:
+      type: boolean
+    route:
+      type: string

@@ -1,0 +1,15 @@
+# Payload used to toggle an individual VIP benefit.
+VipBenefitPatch:
+  type: object
+  properties:
+    benefitKey:
+      type: string
+      # Existing benefit keys are preserved because they are API identifiers.
+      enum:
+      - acoesPromocionais
+      - tagCustomizada
+      - bypassSlowMode
+      - falarGrupoFechado
+      - opinarDecisoes
+    isActive:
+      type: boolean

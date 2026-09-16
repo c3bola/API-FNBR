@@ -1,0 +1,26 @@
+# Telegram Login Widget payload used to authenticate an administrator.
+TelegramAuthPayload:
+  type: object
+  required:
+  - id
+  - first_name
+  - auth_date
+  - hash
+  properties:
+    id:
+      type: integer
+    first_name:
+      type: string
+    last_name:
+      type: string
+      nullable: true
+    username:
+      type: string
+      nullable: true
+    photo_url:
+      type: string
+      nullable: true
+    auth_date:
+      type: integer
+    hash:
+      type: string

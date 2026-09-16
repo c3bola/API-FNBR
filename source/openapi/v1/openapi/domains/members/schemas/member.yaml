@@ -1,0 +1,43 @@
+# Community member representation.
+Member:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    username:
+      type: string
+    avatar:
+      type: string
+    role:
+      type: string
+      # Existing role and status literals are preserved for backend compatibility.
+      enum:
+      - Admin
+      - VIP
+      - Membro
+    status:
+      type: string
+      enum:
+      - Online
+      - Offline
+      - Banido
+    warns:
+      type: integer
+    joinDate:
+      type: string
+      format: date-time
+    registrations:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          type:
+            type: string
+            enum:
+            - group
+            - bot
+            - channel

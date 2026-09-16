@@ -1,0 +1,14 @@
+# Existing blacklist entry.
+BlacklistItem:
+  type: object
+  properties:
+    id:
+      type: string
+    type:
+      type: string
+      enum:
+      - url
+      - palavra
+      - id_usuario
+    value:
+      type: string

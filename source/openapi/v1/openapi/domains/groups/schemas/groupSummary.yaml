@@ -1,0 +1,78 @@
+# Compact group representation used in group listings.
+GroupSummary:
+  type: object
+  properties:
+    id:
+      type: string
+    platformId:
+      type: string
+    name:
+      type: string
+    description:
+      type: string
+      nullable: true
+    coverImageUrl:
+      type: string
+      nullable: true
+    iconName:
+      type: string
+      nullable: true
+    themeColor:
+      type: string
+      nullable: true
+    badgeText:
+      type: string
+      nullable: true
+    badgeColor:
+      type: string
+      nullable: true
+    memberCount:
+      type: integer
+    onlineCount:
+      type: integer
+    isOfficial:
+      type: boolean
+    isVip:
+      type: boolean
+    language:
+      type: string
+      nullable: true
+    mode:
+      type: string
+      nullable: true
+    type:
+      type: string
+      enum:
+        - group
+        - channel
+    visibility:
+      type: string
+      enum:
+        - public
+        - private
+        - restricted
+    botActive:
+      type: boolean
+    createdAt:
+      type: string
+      format: date-time
+    isLinkedToChannel:
+      type: boolean
+    linkedChannelId:
+      type: string
+      format: uuid
+      nullable: true
+    moderatorBot:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        iconName:
+          type: string
+          nullable: true
+        themeColor:
+          type: string
+          nullable: true

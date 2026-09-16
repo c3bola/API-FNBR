@@ -1,0 +1,21 @@
+# Member activity timeline endpoint.
+/members/{memberId}/timeline:
+  get:
+    summary: Gets the history of the user's actions and interactions in the community.
+    tags:
+    - Members
+    parameters:
+    - in: path
+      name: memberId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/timelineEvent.yaml#/TimelineEvent

@@ -1,0 +1,62 @@
+# Telegram forum topic management endpoints.
+/groups/{groupId}/moderation-bots/{botId}/topics:
+  post:
+    summary: Creates a new topic in the group (Telegram API) and saves it to the configuration.
+    tags:
+    - Groups
+    - Moderation
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: botId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/topicCreateRequest.yaml#/TopicCreateRequest
+    responses:
+      '201':
+        description: Topic created.
+/groups/{groupId}/moderation-bots/{botId}/topics/{topicId}:
+  patch:
+    summary: Opens or closes an existing topic (Telegram API) and updates the configuration.
+    tags:
+    - Groups
+    - Moderation
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: botId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: topicId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/topicPatchRequest.yaml#/TopicPatchRequest
+    responses:
+      '200':
+        description: Topic status updated.

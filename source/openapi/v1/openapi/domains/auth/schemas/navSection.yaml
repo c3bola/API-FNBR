@@ -1,0 +1,10 @@
+# Navigation section containing client navigation items.
+NavSection:
+  type: object
+  properties:
+    section:
+      type: string
+    items:
+      type: array
+      items:
+        $ref: ./navItem.yaml#/NavItem

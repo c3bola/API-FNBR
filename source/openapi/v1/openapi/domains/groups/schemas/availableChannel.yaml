@@ -1,0 +1,15 @@
+# Channel representation available for linking to a group.
+AvailableChannel:
+  type: object
+  required:
+    - id
+    - name
+    - platformId
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+    platformId:
+      type: string

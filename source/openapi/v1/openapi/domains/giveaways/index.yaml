@@ -1,0 +1,14 @@
+# Giveaways domain aggregator.
+paths:
+  /giveaways:
+    $ref: ./paths/giveaways.yaml#/~1giveaways
+  /giveaways/{id}:
+    $ref: ./paths/giveaways.yaml#/~1giveaways~1{id}
+  /giveaways/{id}/draw:
+    $ref: ./paths/giveaways.yaml#/~1giveaways~1{id}~1draw
+components:
+  schemas:
+    Giveaway:
+      $ref: ./schemas/giveaway.yaml#/Giveaway
+    NewGiveaway:
+      $ref: ./schemas/newGiveaway.yaml#/NewGiveaway

@@ -1,0 +1,26 @@
+# Announcement representation.
+Announcement:
+  type: object
+  properties:
+    id:
+      type: string
+    title:
+      type: string
+    excerpt:
+      type: string
+    status:
+      type: string
+      # Existing status literals are preserved for backend compatibility.
+      enum:
+      - Enviado
+      - Agendado
+      - Rascunho
+    date:
+      type: string
+      format: date-time
+    views:
+      type: integer
+    targets:
+      type: array
+      items:
+        type: string

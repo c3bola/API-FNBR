@@ -1,0 +1,38 @@
+# Group moderation and messaging configuration endpoints.
+/groups/{groupId}/config:
+  get:
+    summary: Gets the detailed settings, messages, and filters for a group.
+    tags:
+    - Groups
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/groupConfig.yaml#/GroupConfig
+  put:
+    summary: Updates the group configuration in a single request.
+    tags:
+    - Groups
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/groupConfig.yaml#/GroupConfig
+    responses:
+      '200':
+        description: Configuration updated.

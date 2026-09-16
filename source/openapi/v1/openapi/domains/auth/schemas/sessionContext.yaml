@@ -1,0 +1,16 @@
+# Data required by the client to initialize the authenticated session.
+SessionContext:
+  type: object
+  properties:
+    user:
+      $ref: ./userContext.yaml#/UserContext
+    notifications_count:
+      type: integer
+    bots_access:
+      type: array
+      items:
+        $ref: ./botAccess.yaml#/BotAccess
+    navigation:
+      type: array
+      items:
+        $ref: ./navSection.yaml#/NavSection

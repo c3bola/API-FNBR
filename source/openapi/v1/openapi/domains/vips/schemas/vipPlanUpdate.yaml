@@ -1,0 +1,15 @@
+# Payload used to update a VIP subscription plan.
+VipPlanUpdate:
+  type: object
+  properties:
+    plan:
+      type: string
+      enum:
+      - R$ 3,00
+      - R$ 4,00
+      - R$ 5,00
+    divulgacoesDiarias:
+      type: integer
+    expiresAt:
+      type: string
+      format: date-time

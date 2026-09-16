@@ -1,0 +1,16 @@
+# Moderation bot availability and current group status.
+ModerationBotStatus:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    iconName:
+      type: string
+      nullable: true
+    themeColor:
+      type: string
+      nullable: true
+    isEnabled:
+      type: boolean

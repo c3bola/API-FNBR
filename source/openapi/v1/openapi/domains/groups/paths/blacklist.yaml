@@ -1,0 +1,59 @@
+# Group blacklist management endpoints.
+/groups/{groupId}/blacklist:
+  get:
+    summary: Lists all blacklist items for the group.
+    tags:
+    - Groups
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/blacklistItem.yaml#/BlacklistItem
+  post:
+    summary: Adds a new item (URL, word, or ID) to the group blacklist.
+    tags:
+    - Groups
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/newBlacklistItem.yaml#/NewBlacklistItem
+    responses:
+      '201':
+        description: Item added to the blacklist.
+/groups/{groupId}/blacklist/{itemId}:
+  delete:
+    summary: Removes a specific blacklist item.
+    tags:
+    - Groups
+    parameters:
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: itemId
+      required: true
+      schema:
+        type: string
+    responses:
+      '204':
+        description: Item removed successfully.
