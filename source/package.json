@@ -21,7 +21,8 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
     "pino": "^9.4.0",
-    "pino-http": "^10.2.0"
+    "pino-http": "^10.2.0",
+    "redis": "^6.2.1"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.13.4",

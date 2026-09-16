@@ -1,8 +1,9 @@
 // npm run generate:api
 // npm run dev
 import app from './apifnbr';
-import { testDatabaseConnection, dbPool } from './infra/database/postgres.config';
-
+import { testDatabaseConnection, pool } from './infra/database/postgres.config'; // <-- Corrigido para pool
+import express from 'express';
+import path from 'path';
 const PORT = process.env.PORT || 3000;
 
 async function bootstrap() {
@@ -15,13 +16,13 @@ async function bootstrap() {
 
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n[Server] Recebido sinal ${signal}. Iniciando desligamento gracioso...`);
-    
+
     server.close(async () => {
       console.log('[Server] Servidor HTTP fechado. Recusando novas requisições.');
-      
+
       try {
-        await dbPool.end();
-        console.log('[Database] Pool de conexões do MySQL encerrado.');
+        await pool.end(); // <-- Corrigido para pool.end()
+        console.log('[Database] Pool de conexões do PostgreSQL encerrado.');
         process.exit(0);
       } catch (err) {
         console.error('[Database] Erro ao fechar as conexões:', err);
@@ -34,7 +35,9 @@ async function bootstrap() {
       process.exit(1);
     }, 10000);
   };
-
+  app.use(express.static(path.join(process.cwd(), 'public')));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 }
