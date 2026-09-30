@@ -82,7 +82,7 @@ export class GroupsRepository {
     return result.rows[0];
   }
 
-  // NOVO: Puxa grupos livres ou o grupo já associado a este canal
+  // 
   async getAvailableGroups(currentChannelId?: string) {
     const query = `
       SELECT c.id_comunidade AS id, c.name, c.platform_id AS "platformId" 
@@ -98,7 +98,7 @@ export class GroupsRepository {
     return result.rows;
   }
 
-  // ATUALIZADO: Salva bidirecionalmente
+  // 
   async updateGroupBatch(groupId: string, data: any) {
     const client = await pool.connect();
     try {
