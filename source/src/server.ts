@@ -1,7 +1,7 @@
 // npm run generate:api
 // npm run dev
 import app from './apifnbr';
-import { testDatabaseConnection, pool } from './infra/database/postgres.config'; // <-- Corrigido para pool
+import { testDatabaseConnection, pool } from './infra/database/postgres.config'; 
 import express from 'express';
 import path from 'path';
 const PORT = process.env.PORT || 3000;
@@ -21,7 +21,7 @@ async function bootstrap() {
       console.log('[Server] Servidor HTTP fechado. Recusando novas requisições.');
 
       try {
-        await pool.end(); // <-- Corrigido para pool.end()
+        await pool.end();
         console.log('[Database] Pool de conexões do PostgreSQL encerrado.');
         process.exit(0);
       } catch (err) {
