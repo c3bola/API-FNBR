@@ -7,9 +7,15 @@ info:
 servers:
 - url: http://localhost:3000/api/v1
   description: Development Server
+security:
+- bearerAuth: []
 tags:
+- name: Auth
+  description: Authentication and session management
 - name: Groups
   description: Group management and global configuration
+- name: Moderation
+  description: Member and bot moderation operations
 - name: Members
   description: Community member lookup and moderation
 - name: VIPs
@@ -18,10 +24,14 @@ tags:
   description: Bulk announcement delivery and scheduling
 - name: Giveaways
   description: Automated giveaway creation and execution
+- name: Resources
+  description: Bot modules, commands, responses, and dynamic variables
 paths:
   $ref: ./domains/all-paths.yaml#/paths
 components:
   securitySchemes:
     $ref: ./components/security.yaml
+  responses:
+    $ref: ./components/responses.yaml#/responses
   schemas:
     $ref: ./domains/all-schemas.yaml#/schemas

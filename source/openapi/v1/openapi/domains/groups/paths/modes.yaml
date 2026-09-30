@@ -2,10 +2,9 @@
 /groups/modes:
   get:
     summary: Lists the available destination modes for groups.
+    operationId: groupsModesGet
     tags:
     - Groups
-    security:
-    - bearerAuth: []
     responses:
       '200':
         description: OK
@@ -20,3 +19,5 @@
                     type: integer
                   name:
                     type: string
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

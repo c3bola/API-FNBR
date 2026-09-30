@@ -1,0 +1,17 @@
+/modules:
+  get:
+    summary: Lists all modules (resources) available in the bots.
+    operationId: modulesGet
+    tags:
+    - Resources
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../schemas/module.yaml'
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

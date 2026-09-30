@@ -2,6 +2,7 @@
 /groups/{groupId}/blacklist:
   get:
     summary: Lists all blacklist items for the group.
+    operationId: groupsGroupIdBlacklistGet
     tags:
     - Groups
     parameters:
@@ -19,8 +20,11 @@
               type: array
               items:
                 $ref: ../schemas/blacklistItem.yaml#/BlacklistItem
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   post:
     summary: Adds a new item (URL, word, or ID) to the group blacklist.
+    operationId: groupsGroupIdBlacklistPost
     tags:
     - Groups
     parameters:
@@ -38,9 +42,12 @@
     responses:
       '201':
         description: Item added to the blacklist.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /groups/{groupId}/blacklist/{itemId}:
   delete:
     summary: Removes a specific blacklist item.
+    operationId: groupsGroupIdBlacklistItemIdDelete
     tags:
     - Groups
     parameters:
@@ -57,3 +64,5 @@
     responses:
       '204':
         description: Item removed successfully.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

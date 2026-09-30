@@ -1,0 +1,3 @@
+responses:
+  Unauthorized:
+    description: Missing or invalid authentication token.

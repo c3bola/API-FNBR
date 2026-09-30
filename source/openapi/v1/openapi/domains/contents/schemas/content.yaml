@@ -1,0 +1,9 @@
+type: object
+discriminator:
+  propertyName: type
+  mapping:
+    elemental: './elemental.yaml'
+    skin: './skin.yaml'
+oneOf:
+  - $ref: './elemental.yaml'
+  - $ref: './skin.yaml' 

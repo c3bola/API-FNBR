@@ -1,0 +1,14 @@
+type: object
+required:
+  - name
+properties:
+  id:
+    type: string
+  name:
+    type: string
+  styleDescription:
+    type: string
+    nullable: true
+  imageUrl:
+    type: string
+    nullable: true

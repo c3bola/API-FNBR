@@ -1,0 +1,95 @@
+/contents:
+  get:
+    summary: Lista todos os conteúdos (Skins e Elementais) do FortMeBot.
+    tags:
+      - Contents
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum: [elemental, skin]
+        description: Filtra a listagem pelo tipo de conteúdo.
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../schemas/content.yaml'
+  post:
+    summary: Cria um novo conteúdo (Skin ou Elemental) junto com suas variações/estilos.
+    tags:
+      - Contents
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/content.yaml'
+    responses:
+      '201':
+        description: Conteúdo criado com sucesso.
+
+/contents/{contentId}:
+  get:
+    summary: Obtém os detalhes completos de um conteúdo específico.
+    tags:
+      - Contents
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: contentId
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/content.yaml'
+  put:
+    summary: Atualiza os dados de um conteúdo e suas variações.
+    tags:
+      - Contents
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: contentId
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/content.yaml'
+    responses:
+      '200':
+        description: Conteúdo atualizado com sucesso.
+  delete:
+    summary: Exclui um conteúdo e todas as suas variações.
+    tags:
+      - Contents
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: contentId
+        required: true
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Conteúdo excluído com sucesso.

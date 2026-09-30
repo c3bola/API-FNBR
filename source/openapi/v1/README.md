@@ -61,20 +61,10 @@ npx redocly bundle openapi/index.yaml -o ./openapi.yaml
 Because `package.json` already defines the equivalent script, you can also use:
 
 ```bash
-npm run openapi:bundle
+cd v1
+    npm run openapi:bundle
 ```
 
-To validate before bundling:
-
-```bash
-npm run openapi:lint
-```
-
-Or run validation + bundle:
-
-```bash
-npm run openapi:build
-```
 
 ## OpenAPI Generator
 

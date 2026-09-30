@@ -2,6 +2,7 @@
 /announcements:
   get:
     summary: Lists sent, draft, and scheduled announcements.
+    operationId: announcementsGet
     tags:
     - Announcements
     responses:
@@ -13,8 +14,11 @@
               type: array
               items:
                 $ref: ../schemas/announcement.yaml#/Announcement
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   post:
     summary: Creates and sends (or schedules) a new announcement for selected targets.
+    operationId: announcementsPost
     tags:
     - Announcements
     requestBody:
@@ -26,9 +30,12 @@
     responses:
       '201':
         description: Announcement registered for delivery.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /announcements/{id}:
   delete:
     summary: Cancels a scheduled announcement or deletes a draft.
+    operationId: announcementsIdDelete
     tags:
     - Announcements
     parameters:
@@ -40,3 +47,5 @@
     responses:
       '204':
         description: Announcement removed.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

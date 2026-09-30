@@ -1,0 +1,26 @@
+type: object
+properties:
+  commandTrigger:
+    type: string
+  aliases:
+    type: array
+    items:
+      type: string
+  description:
+    type: string
+  categoryName:
+    type: string
+  icon:
+    type: string
+  isActive:
+    type: boolean
+  responseConfig:
+    type: object
+    properties:
+      mediaUrl:
+        type: string
+        nullable: true
+      text:
+        type: string
+  customConfig:
+    type: object

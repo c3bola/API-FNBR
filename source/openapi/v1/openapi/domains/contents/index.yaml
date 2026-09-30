@@ -1,0 +1,19 @@
+paths:
+  /contents:
+    $ref: './paths/contents.yaml#/contents'
+  /contents/{contentId}:
+    $ref: './paths/contents.yaml#/contents/{contentId}'
+
+schemas:
+  ContentBase:
+    $ref: './schemas/contentBase.yaml'
+  ElementalVariant:
+    $ref: './schemas/elementalVariant.yaml'
+  Elemental:
+    $ref: './schemas/elemental.yaml'
+  SkinStyle:
+    $ref: './schemas/skinStyle.yaml'
+  Skin:
+    $ref: './schemas/skin.yaml'
+  Content:
+    $ref: './schemas/content.yaml'

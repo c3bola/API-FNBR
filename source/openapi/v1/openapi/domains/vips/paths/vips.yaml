@@ -2,6 +2,7 @@
 /vips:
   get:
     summary: Lists VIP Club subscribers.
+    operationId: vipsGet
     tags:
     - VIPs
     responses:
@@ -13,9 +14,12 @@
               type: array
               items:
                 $ref: ../schemas/vipMember.yaml#/VipMember
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /vips/{memberId}:
   put:
     summary: Updates the VIP base plan, daily promotion limit, and expiration date.
+    operationId: vipsMemberIdPut
     tags:
     - VIPs
     parameters:
@@ -33,9 +37,12 @@
     responses:
       '200':
         description: Plan updated successfully.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /vips/{memberId}/benefits:
   patch:
     summary: Enables or disables individual benefits (tags, bypass, etc.).
+    operationId: vipsMemberIdBenefitsPatch
     tags:
     - VIPs
     parameters:
@@ -53,3 +60,5 @@
     responses:
       '200':
         description: Benefit updated successfully.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

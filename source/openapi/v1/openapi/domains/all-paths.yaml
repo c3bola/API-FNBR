@@ -83,3 +83,24 @@ paths:
 
   /giveaways/{id}/draw:
     $ref: ./giveaways/paths/giveaways.yaml#/~1giveaways~1{id}~1draw
+
+  /modules:
+    $ref: ./resources/paths/modules.yaml#/~1modules
+
+  /modules/{moduleId}/commands:
+    $ref: ./resources/paths/commands.yaml#/~1modules~1{moduleId}~1commands
+
+  /commands/{commandId}:
+    $ref: ./resources/paths/commands.yaml#/~1commands~1{commandId}
+
+  /commands/{commandId}/permissions:
+    $ref: ./resources/paths/commands.yaml#/~1commands~1{commandId}~1permissions
+
+  /dynamic-variables:
+    $ref: ./resources/paths/dynamic-variables.yaml#/~1dynamic-variables
+
+  /contents:
+    $ref: ./contents/paths/contents.yaml#/~1contents
+
+  /contents/{contentId}:
+    $ref: ./contents/paths/contents.yaml#/~1contents~1{contentId}

@@ -1,0 +1,27 @@
+type: object
+required:
+  - name
+  - rarity
+properties:
+  id:
+    type: string
+  name:
+    type: string
+  rarity:
+    type: string
+  summonCost:
+    type: integer
+    default: 0
+  dropChance:
+    type: number
+    format: float
+    default: 0
+  location:
+    type: string
+    nullable: true
+  variantDescription:
+    type: string
+    nullable: true
+  imageUrl:
+    type: string
+    nullable: true

@@ -1,0 +1,23 @@
+paths:
+  /modules:
+    $ref: './paths/modules.yaml#/~1modules'
+  /modules/{moduleId}/commands:
+    $ref: './paths/commands.yaml#/~1modules~1{moduleId}~1commands'
+  /commands/{commandId}:
+    $ref: './paths/commands.yaml#/~1commands~1{commandId}'
+  /commands/{commandId}/permissions:
+    $ref: './paths/commands.yaml#/~1commands~1{commandId}~1permissions'
+  /dynamic-variables:
+    $ref: './paths/dynamic-variables.yaml#/~1dynamic-variables'
+
+schemas:
+  Module:
+    $ref: './schemas/module.yaml'
+  Command:
+    $ref: './schemas/command.yaml'
+  CommandUpdate:
+    $ref: './schemas/commandUpdate.yaml'
+  CommandPermissionsUpdate:
+    $ref: './schemas/commandPermissionsUpdate.yaml'
+  DynamicVariable:
+    $ref: './schemas/dynamicVariable.yaml'

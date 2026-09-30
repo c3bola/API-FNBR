@@ -2,8 +2,10 @@
 /auth/telegram:
   post:
     summary: Authenticates the administrator using the Telegram Login Widget.
+    operationId: authTelegramPost
     tags:
     - Auth
+    security: []
     requestBody:
       required: true
       content:

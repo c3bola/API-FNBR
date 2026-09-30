@@ -1,3 +1,15 @@
+# Redocly configuration for the modular Fortnite Brasil Admin API.
+# The API entrypoint is resolved relative to this configuration file.
 apis:
   fortnite-admin:
     root: ./openapi/index.yaml
+
+rules:
+  # The API uses a development localhost server intentionally.
+  no-server-example-com: off
+
+  # License metadata will be added when the project's distribution license is defined.
+  info-license: off
+  
+  extends:
+  - recommended

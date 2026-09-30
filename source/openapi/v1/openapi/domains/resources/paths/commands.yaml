@@ -1,0 +1,91 @@
+/modules/{moduleId}/commands:
+  get:
+    summary: Lists the commands belonging to a specific module.
+    operationId: modulesModuleIdCommandsGet
+    tags:
+    - Resources
+    parameters:
+    - in: path
+      name: moduleId
+      required: true
+      schema:
+        type: integer
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../schemas/command.yaml'
+
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+/commands/{commandId}:
+  get:
+    summary: Gets the complete details of a command.
+    operationId: commandsCommandIdGet
+    tags:
+    - Resources
+    parameters:
+    - in: path
+      name: commandId
+      required: true
+      schema:
+        type: integer
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '../schemas/command.yaml'
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+  put:
+    summary: Updates the general data, response, and custom settings of a command.
+    operationId: commandsCommandIdPut
+    tags:
+    - Resources
+    parameters:
+    - in: path
+      name: commandId
+      required: true
+      schema:
+        type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/commandUpdate.yaml'
+    responses:
+      '200':
+        description: Command updated successfully.
+
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+/commands/{commandId}/permissions:
+  put:
+    summary: Updates the command access level and authorized groups.
+    operationId: commandsCommandIdPermissionsPut
+    tags:
+    - Resources
+    parameters:
+    - in: path
+      name: commandId
+      required: true
+      schema:
+        type: integer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../schemas/commandPermissionsUpdate.yaml'
+    responses:
+      '200':
+        description: Command permissions updated successfully.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

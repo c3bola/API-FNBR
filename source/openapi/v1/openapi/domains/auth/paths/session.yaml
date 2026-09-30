@@ -2,10 +2,9 @@
 /auth/me:
   get:
     summary: Returns the current session context (user, authorized bots, and dynamic navigation).
+    operationId: authMeGet
     tags:
     - Auth
-    security:
-    - bearerAuth: []
     responses:
       '200':
         description: Session context loaded successfully.

@@ -83,3 +83,36 @@ schemas:
 
   NewGiveaway:
     $ref: ./giveaways/schemas/newGiveaway.yaml#/NewGiveaway
+  
+  Module:
+    $ref: ./resources/schemas/module.yaml
+
+  Command:
+    $ref: ./resources/schemas/command.yaml
+
+  CommandUpdate:
+    $ref: ./resources/schemas/commandUpdate.yaml
+
+  CommandPermissionsUpdate:
+    $ref: ./resources/schemas/commandPermissionsUpdate.yaml
+
+  DynamicVariable:
+    $ref: ./resources/schemas/dynamicVariable.yaml
+
+  ContentBase:
+    $ref: ./contents/schemas/contentBase.yaml
+    
+  ElementalVariant:
+    $ref: ./contents/schemas/elementalVariant.yaml
+    
+  Elemental:
+    $ref: ./contents/schemas/elemental.yaml
+    
+  SkinStyle:
+    $ref: ./contents/schemas/skinStyle.yaml
+    
+  Skin:
+    $ref: ./contents/schemas/skin.yaml
+    
+  Content:
+    $ref: ./contents/schemas/content.yaml

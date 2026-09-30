@@ -2,6 +2,7 @@
 /groups/{groupId}/config:
   get:
     summary: Gets the detailed settings, messages, and filters for a group.
+    operationId: groupsGroupIdConfigGet
     tags:
     - Groups
     parameters:
@@ -17,8 +18,11 @@
           application/json:
             schema:
               $ref: ../schemas/groupConfig.yaml#/GroupConfig
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   put:
     summary: Updates the group configuration in a single request.
+    operationId: groupsGroupIdConfigPut
     tags:
     - Groups
     parameters:
@@ -36,3 +40,5 @@
     responses:
       '200':
         description: Configuration updated.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

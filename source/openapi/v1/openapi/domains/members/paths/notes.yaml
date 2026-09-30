@@ -2,6 +2,7 @@
 /members/{memberId}/notes:
   get:
     summary: Lists internal staff notes for the member.
+    operationId: membersMemberIdNotesGet
     tags:
     - Members
     parameters:
@@ -19,8 +20,11 @@
               type: array
               items:
                 $ref: ../schemas/staffNote.yaml#/StaffNote
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   post:
     summary: Adds an internal note about the member.
+    operationId: membersMemberIdNotesPost
     tags:
     - Members
     parameters:
@@ -41,9 +45,12 @@
     responses:
       '201':
         description: Note added.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /members/{memberId}/notes/{noteId}:
   delete:
     summary: Removes a staff note.
+    operationId: membersMemberIdNotesNoteIdDelete
     tags:
     - Members
     parameters:
@@ -60,3 +67,5 @@
     responses:
       '204':
         description: Note removed.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

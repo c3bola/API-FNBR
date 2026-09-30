@@ -2,6 +2,7 @@
 /giveaways:
   get:
     summary: Lists all giveaways (active and completed).
+    operationId: giveawaysGet
     tags:
     - Giveaways
     responses:
@@ -13,8 +14,11 @@
               type: array
               items:
                 $ref: ../schemas/giveaway.yaml#/Giveaway
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   post:
     summary: Creates a new giveaway and publishes its preview on Telegram.
+    operationId: giveawaysPost
     tags:
     - Giveaways
     requestBody:
@@ -26,9 +30,12 @@
     responses:
       '201':
         description: Giveaway created successfully.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /giveaways/{id}:
   delete:
     summary: Removes a giveaway (deleting the Telegram message when applicable).
+    operationId: giveawaysIdDelete
     tags:
     - Giveaways
     parameters:
@@ -40,9 +47,12 @@
     responses:
       '204':
         description: Giveaway removed.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /giveaways/{id}/draw:
   post:
     summary: Runs the giveaway and immediately selects the winners.
+    operationId: giveawaysIdDrawPost
     tags:
     - Giveaways
     parameters:
@@ -54,3 +64,5 @@
     responses:
       '200':
         description: Giveaway completed. Notifications sent to the winners.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

@@ -1,0 +1,15 @@
+allOf:
+  - $ref: './contentBase.yaml'
+  - type: object
+    properties:
+      chapter:
+        type: string
+      season:
+        type: string
+      origin:
+        type: string
+        description: Ex. "Passe de Batalha", "Loja"
+      styles:
+        type: array
+        items:
+          $ref: './skinStyle.yaml'

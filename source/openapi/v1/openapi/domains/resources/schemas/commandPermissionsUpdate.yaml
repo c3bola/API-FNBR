@@ -1,0 +1,13 @@
+type: object
+required:
+  - accessLevel
+  - authorizedGroupIds
+properties:
+  accessLevel:
+    type: string
+    enum: [community, club, admin]
+  authorizedGroupIds:
+    type: array
+    items:
+      type: string
+      format: uuid

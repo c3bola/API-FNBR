@@ -2,8 +2,9 @@
 /groups:
   get:
     summary: Lists all groups monitored by the bots.
+    operationId: groupsGet
     tags:
-      - Groups
+    - Groups
     responses:
       '200':
         description: OK
@@ -14,12 +15,13 @@
               items:
                 $ref: ../schemas/groupSummary.yaml#/GroupSummary
 
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   post:
     summary: Creates a new group in the community.
+    operationId: groupsPost
     tags:
-      - Groups
-    security:
-      - bearerAuth: []
+    - Groups
     requestBody:
       required: true
       content:
@@ -27,11 +29,11 @@
           schema:
             type: object
             required:
-              - platformId
-              - name
-              - isOfficial
-              - type
-              - visibility
+            - platformId
+            - name
+            - isOfficial
+            - type
+            - visibility
             properties:
               platformId:
                 type: string
@@ -60,15 +62,15 @@
               type:
                 type: string
                 enum:
-                  - group
-                  - channel
+                - group
+                - channel
                 default: group
               visibility:
                 type: string
                 enum:
-                  - public
-                  - private
-                  - restricted
+                - public
+                - private
+                - restricted
                 default: public
               language:
                 type: string
@@ -81,19 +83,20 @@
             schema:
               $ref: ../schemas/groupSummary.yaml#/GroupSummary
 
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /groups/{groupId}:
   get:
     summary: Gets detailed data for a specific group.
+    operationId: groupsGroupIdGet
     tags:
-      - Groups
-    security:
-      - bearerAuth: []
+    - Groups
     parameters:
-      - in: path
-        name: groupId
-        required: true
-        schema:
-          type: string
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
     responses:
       '200':
         description: OK
@@ -102,20 +105,22 @@
             schema:
               $ref: ../schemas/groupDetail.yaml#/GroupDetail
 
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   put:
     summary: Updates the general group data in a single request.
+    operationId: groupsGroupIdPut
     description: >-
-      Updates the general group data. `isForum: true` cannot be sent together with `isLinkedToChannel: true` or a populated `linkedChannelId`.
+      Updates the general group data. `isForum: true` cannot be sent together with `isLinkedToChannel: true` or a populated
+      `linkedChannelId`.
     tags:
-      - Groups
-    security:
-      - bearerAuth: []
+    - Groups
     parameters:
-      - in: path
-        name: groupId
-        required: true
-        schema:
-          type: string
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
     requestBody:
       required: true
       content:
@@ -130,19 +135,20 @@
             schema:
               $ref: ../schemas/groupDetail.yaml#/GroupDetail
 
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   delete:
     summary: Deactivates/removes a group from the community (soft delete)
+    operationId: groupsGroupIdDelete
     description: Marks the group status as inactive, removes channel links, and releases associated resources.
     tags:
-      - Groups
-    security:
-      - bearerAuth: []
+    - Groups
     parameters:
-      - in: path
-        name: groupId
-        required: true
-        schema:
-          type: string
+    - in: path
+      name: groupId
+      required: true
+      schema:
+        type: string
     responses:
       '204':
         description: Group deactivated successfully. No content is returned.
@@ -151,13 +157,14 @@
       '500':
         description: Internal error while deactivating the group.
 
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /groups/channels/available:
   get:
     summary: Lists channels available for linking.
+    operationId: groupsChannelsAvailableGet
     tags:
-      - Groups
-    security:
-      - bearerAuth: []
+    - Groups
     responses:
       '200':
         description: OK
@@ -167,3 +174,5 @@
               type: array
               items:
                 $ref: ../schemas/availableChannel.yaml#/AvailableChannel
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

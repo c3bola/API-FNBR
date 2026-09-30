@@ -2,6 +2,7 @@
 /members/{memberId}/timeline:
   get:
     summary: Gets the history of the user's actions and interactions in the community.
+    operationId: membersMemberIdTimelineGet
     tags:
     - Members
     parameters:
@@ -19,3 +20,5 @@
               type: array
               items:
                 $ref: ../schemas/timelineEvent.yaml#/TimelineEvent
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

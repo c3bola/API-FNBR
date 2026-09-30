@@ -2,11 +2,10 @@
 /groups/{groupId}/moderation-bots:
   get:
     summary: Lists available moderation bots and their link status for the group.
+    operationId: groupsGroupIdModerationBotsGet
     tags:
     - Groups
     - Moderation
-    security:
-    - bearerAuth: []
     parameters:
     - in: path
       name: groupId
@@ -22,14 +21,15 @@
               type: array
               items:
                 $ref: ../schemas/moderationBotStatus.yaml#/ModerationBotStatus
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /groups/{groupId}/moderation-bots/{botId}/status:
   put:
     summary: Enables or disables monitoring for a specific bot in the group.
+    operationId: groupsGroupIdModerationBotsBotIdStatusPut
     tags:
     - Groups
     - Moderation
-    security:
-    - bearerAuth: []
     parameters:
     - in: path
       name: groupId
@@ -55,14 +55,15 @@
     responses:
       '200':
         description: Status updated successfully.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /groups/{groupId}/moderation-bots/{botId}/config:
   get:
     summary: Gets the bot moderation settings (JSON) for the group.
+    operationId: groupsGroupIdModerationBotsBotIdConfigGet
     tags:
     - Groups
     - Moderation
-    security:
-    - bearerAuth: []
     parameters:
     - in: path
       name: groupId
@@ -81,13 +82,14 @@
           application/json:
             schema:
               type: object
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
   put:
     summary: Updates the bot moderation settings (JSON) for the group.
+    operationId: groupsGroupIdModerationBotsBotIdConfigPut
     tags:
     - Groups
     - Moderation
-    security:
-    - bearerAuth: []
     parameters:
     - in: path
       name: groupId
@@ -108,3 +110,5 @@
     responses:
       '200':
         description: Configuration updated.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

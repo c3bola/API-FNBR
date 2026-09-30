@@ -2,11 +2,10 @@
 /groups/{groupId}/moderation-bots/{botId}/topics:
   post:
     summary: Creates a new topic in the group (Telegram API) and saves it to the configuration.
+    operationId: groupsGroupIdModerationBotsBotIdTopicsPost
     tags:
     - Groups
     - Moderation
-    security:
-    - bearerAuth: []
     parameters:
     - in: path
       name: groupId
@@ -27,14 +26,15 @@
     responses:
       '201':
         description: Topic created.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /groups/{groupId}/moderation-bots/{botId}/topics/{topicId}:
   patch:
     summary: Opens or closes an existing topic (Telegram API) and updates the configuration.
+    operationId: groupsGroupIdModerationBotsBotIdTopicsTopicIdPatch
     tags:
     - Groups
     - Moderation
-    security:
-    - bearerAuth: []
     parameters:
     - in: path
       name: groupId
@@ -60,3 +60,5 @@
     responses:
       '200':
         description: Topic status updated.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

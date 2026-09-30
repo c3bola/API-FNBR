@@ -2,6 +2,7 @@
 /members:
   get:
     summary: Lists members with filtering and pagination support.
+    operationId: membersGet
     tags:
     - Members
     parameters:
@@ -26,9 +27,12 @@
               type: array
               items:
                 $ref: ../schemas/member.yaml#/Member
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
 /members/{memberId}:
   get:
     summary: Gets details for a specific member.
+    operationId: membersMemberIdGet
     tags:
     - Members
     parameters:
@@ -44,3 +48,5 @@
           application/json:
             schema:
               $ref: ../schemas/member.yaml#/Member
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized

@@ -1,0 +1,10 @@
+allOf:
+  - $ref: './contentBase.yaml'
+  - type: object
+    properties:
+      category:
+        type: string
+      variants:
+        type: array
+        items:
+          $ref: './elementalVariant.yaml'
