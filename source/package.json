@@ -6,10 +6,20 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+
     "build": "tsc",
+
     "clean:api": "rimraf src/generated/v1",
     "pregenerate:api": "npm run clean:api",
-    "generate:api": "openapi-generator-cli generate -i ./openapi/v1/openapi.yaml -g typescript --global-property models -o src/generated/v1",
+
+    "openapi:bundle": "redocly bundle --config openapi/v1/redocly.yaml openapi/v1/openapi/index.yaml -o openapi/v1/openapi/dist/openapi.yaml",
+
+    "openapi:lint": "redocly lint --config openapi/v1/redocly.yaml openapi/v1/openapi/index.yaml",
+
+    "openapi:build": "npm run openapi:lint && npm run openapi:bundle",
+
+    "generate:api": "npm run openapi:build && openapi-generator-cli generate -i openapi/v1/openapi/dist/openapi.yaml -g typescript --global-property models -o src/generated/v1",
+
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\""
   },
@@ -26,6 +36,7 @@
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.13.4",
+    "@redocly/cli": "^1.25.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",

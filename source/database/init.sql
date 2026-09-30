@@ -45,7 +45,7 @@ SELECT 1, id_permission FROM fnbr_community.tb_permission
 ON CONFLICT DO NOTHING;
 
 -- ==========================================
--- 5. BOTS DO ECOSSISTEMA (COMPLETO)
+-- 5. BOTS DO ECOSSISTEMA
 -- ==========================================
 INSERT INTO fnbr_community.tb_bot (id_bot, bot_token, name, username, category, theme_color, status, route, icon, sort_order) VALUES
 ('fortme',       'TOKEN_FORTME',       'FortMeBot',       '@FortMeBot',       'Engajamento',         'purple', 'online', '/bots/fortme',       'Bot',          1),
@@ -59,30 +59,36 @@ ON CONFLICT (id_bot) DO UPDATE SET bot_token = EXCLUDED.bot_token;
 -- ==========================================
 -- 6. MÓDULOS E COMANDOS LÓGICOS
 -- ==========================================
-INSERT INTO fnbr_community.tb_module (code, name, description) VALUES
-('elementais', 'Coleção Elemental', 'Sistema completo de cartas, variantes e geração de mosaicos'),
-('moderacao', 'Moderação Global', 'Controles de anti-spam, banimentos, mutes e advertências'),
-('x1', 'Sistema de Duelos', 'Mecânicas de X1 e engajamento competitivo entre membros')
-ON CONFLICT (code) DO NOTHING;
+-- Agora vinculamos os Módulos diretamente aos Bots no INSERT
+INSERT INTO fnbr_community.tb_module (fk_id_bot, code, name, description) VALUES
+('fortme',   'elementais', 'Coleção Elemental', 'Sistema completo de cartas, variantes e geração de mosaicos'),
+('guardaoi', 'moderacao',  'Moderação Global',  'Controles de anti-spam, banimentos, mutes e advertências'),
+('ioguard',  'moderacao',  'Moderação Teste',   'Ambiente de testes para moderação')
+ON CONFLICT (fk_id_bot, code) DO NOTHING;
 
 DO $$
 DECLARE
     v_mod_elementais INT;
     v_mod_moderacao INT;
 BEGIN
-    SELECT id_module INTO v_mod_elementais FROM fnbr_community.tb_module WHERE code = 'elementais';
-    SELECT id_module INTO v_mod_moderacao FROM fnbr_community.tb_module WHERE code = 'moderacao';
+    SELECT id_module INTO v_mod_elementais FROM fnbr_community.tb_module WHERE code = 'elementais' AND fk_id_bot = 'fortme';
+    SELECT id_module INTO v_mod_moderacao FROM fnbr_community.tb_module WHERE code = 'moderacao' AND fk_id_bot = 'guardaoi';
 
-    INSERT INTO fnbr_community.tb_command (fk_id_module, command_trigger, description, requires_worker) VALUES
-    (v_mod_elementais, '/colecao', 'Gera a imagem do mosaico da coleção do usuário', TRUE),
-    (v_mod_elementais, '/elementais', 'Lista as cartas disponíveis e regras', FALSE),
-    (v_mod_moderacao, '/ban', 'Bane um usuário do grupo', FALSE),
-    (v_mod_moderacao, '/mute', 'Silencia um usuário temporariamente', FALSE)
-    ON CONFLICT (fk_id_module, command_trigger) DO NOTHING;
-    
-    INSERT INTO fnbr_community.tb_bot_module (fk_id_bot, fk_id_module) VALUES ('fortme', v_mod_elementais) ON CONFLICT DO NOTHING;
-    INSERT INTO fnbr_community.tb_bot_module (fk_id_bot, fk_id_module) VALUES ('guardaoi', v_mod_moderacao) ON CONFLICT DO NOTHING;
-    INSERT INTO fnbr_community.tb_bot_module (fk_id_bot, fk_id_module) VALUES ('ioguard', v_mod_moderacao) ON CONFLICT DO NOTHING;
+    -- Comandos apenas para o FortMe
+    IF v_mod_elementais IS NOT NULL THEN
+        INSERT INTO fnbr_community.tb_command (fk_id_module, command_trigger, description, requires_worker) VALUES
+        (v_mod_elementais, '/colecao', 'Gera a imagem do mosaico da coleção do usuário', TRUE),
+        (v_mod_elementais, '/elementais', 'Lista as cartas disponíveis e regras', FALSE)
+        ON CONFLICT (fk_id_module, command_trigger) DO NOTHING;
+    END IF;
+
+    -- Comandos apenas para o GuardaOi
+    IF v_mod_moderacao IS NOT NULL THEN
+        INSERT INTO fnbr_community.tb_command (fk_id_module, command_trigger, description, requires_worker) VALUES
+        (v_mod_moderacao, '/ban', 'Bane um usuário do grupo', FALSE),
+        (v_mod_moderacao, '/mute', 'Silencia um usuário temporariamente', FALSE)
+        ON CONFLICT (fk_id_module, command_trigger) DO NOTHING;
+    END IF;
 END $$;
 
 -- ==========================================
@@ -122,5 +128,25 @@ BEGIN
         RAISE NOTICE 'A conta administrativa já se encontra ativa no banco de dados.';
     END IF;
 END $$;
+
+-- ==========================================
+-- 8. CADASTRO DA VARIÁVEL DINÂMICA
+-- ==========================================
+-- Prefixo 'fnbr_community' adicionado para evitar o erro de schema skipping
+INSERT INTO fnbr_community.tb_dynamic_variable 
+(tag, name, description, example_preview, scope, resolver_action, accepts_parameters, params_schema) 
+VALUES (
+    'load_bar', 
+    'Barra de Carregamento', 
+    'Gera uma barra de progresso visual com base no valor atual e máximo.', 
+    '████░░░░░░', 
+    'global', 
+    'ui_render_progressbar', 
+    TRUE, 
+    '[
+      {"name": "current", "type": "number", "label": "Valor Atual (ou Variável)"},
+      {"name": "max", "type": "number", "label": "Valor Máximo (ou Variável)"}
+    ]'::jsonb
+) ON CONFLICT (tag) DO NOTHING;
 
 COMMIT;
