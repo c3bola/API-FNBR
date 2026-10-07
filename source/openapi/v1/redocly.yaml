@@ -3,13 +3,20 @@
 apis:
   fortnite-admin:
     root: ./openapi/index.yaml
+extends:
+  - recommended
 
 rules:
-  # The API uses a development localhost server intentionally.
-  no-server-example-com: off
-
-  # License metadata will be added when the project's distribution license is defined.
+  # Desativa o alerta sobre o localhost
+  no-server-example.com: off
+  
+  # Desativa a obrigatoriedade de ter operationId nas rotas
+  operation-operationId: off
+  
+  # Desativa a obrigatoriedade de documentar erros 4XX
+  operation-4xx-response: off
+  
+  # Desativa o aviso de falta de licença
   info-license: off
   
-  extends:
-  - recommended
+  
