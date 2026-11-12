@@ -2,12 +2,16 @@
 paths:
   /auth/telegram:
     $ref: ./paths/authentication.yaml#/~1auth~1telegram
+  /auth/{provider}:
+    $ref: ./paths/providerAuth.yaml#/~1auth~1{provider}
   /auth/me:
     $ref: ./paths/session.yaml#/~1auth~1me
 components:
   schemas:
     TelegramAuthPayload:
       $ref: ./schemas/telegramAuthPayload.yaml#/TelegramAuthPayload
+    ProviderAuthPayload:
+      $ref: ./schemas/providerAuthPayload.yaml#/ProviderAuthPayload
     SessionContext:
       $ref: ./schemas/sessionContext.yaml#/SessionContext
     UserContext:

@@ -1,0 +1,82 @@
+paths:
+  /replay-files:
+    $ref: ./paths/replay-files.yaml#/~1replay-files
+  /replay-files/{sha256}:
+    $ref: ./paths/replay-files.yaml#/~1replay-files~1{sha256}
+  /replay-files/{sha256}/processing-attempts:
+    $ref: ./paths/replay-files.yaml#/~1replay-files~1{sha256}~1processing-attempts
+  /matches:
+    $ref: ./paths/matches.yaml#/~1matches
+  /matches/{matchId}:
+    $ref: ./paths/matches.yaml#/~1matches~1{matchId}
+  /matches/{matchId}/stats:
+    $ref: ./paths/matches.yaml#/~1matches~1{matchId}~1stats
+  /matches/{matchId}/players:
+    $ref: ./paths/matches.yaml#/~1matches~1{matchId}~1players
+  /matches/{matchId}/players/{matchPlayerId}:
+    $ref: ./paths/matches.yaml#/~1matches~1{matchId}~1players~1{matchPlayerId}
+  /players:
+    $ref: ./paths/players.yaml#/~1players
+  /players/{playerId}:
+    $ref: ./paths/players.yaml#/~1players~1{playerId}
+  /players/{playerId}/matches:
+    $ref: ./paths/players.yaml#/~1players~1{playerId}~1matches
+  /players/{playerId}/stats:
+    $ref: ./paths/players.yaml#/~1players~1{playerId}~1stats
+  /matches/{matchId}/containers:
+    $ref: ./paths/containers.yaml#/~1matches~1{matchId}~1containers
+  /matches/{matchId}/container-interactions:
+    $ref: ./paths/containers.yaml#/~1matches~1{matchId}~1container-interactions
+  /matches/{matchId}/rewards:
+    $ref: ./paths/rewards.yaml#/~1matches~1{matchId}~1rewards
+  /reward-types:
+    $ref: ./paths/rewards.yaml#/~1reward-types
+  /vehicles:
+    $ref: ./paths/vehicles.yaml#/~1vehicles
+  /matches/{matchId}/players/{matchPlayerId}/vehicle-usages:
+    $ref: ./paths/vehicles.yaml#/~1matches~1{matchId}~1players~1{matchPlayerId}~1vehicle-usages
+  /pois:
+    $ref: ./paths/pois.yaml#/~1pois
+  /matches/{matchId}/players/{matchPlayerId}/poi-visits:
+    $ref: ./paths/pois.yaml#/~1matches~1{matchId}~1players~1{matchPlayerId}~1poi-visits
+  /matches/{matchId}/safe-zone-phases:
+    $ref: ./paths/safe-zones.yaml#/~1matches~1{matchId}~1safe-zone-phases
+
+schemas:
+  ReplayFile:
+    $ref: ./schemas/replayFile.yaml#/ReplayFile
+  ReplayFileRegistration:
+    $ref: ./schemas/replayFile.yaml#/ReplayFileRegistration
+  ReplayProcessingAttempt:
+    $ref: ./schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+  AnalyzerVersion:
+    $ref: ./schemas/replayProcessingAttempt.yaml#/AnalyzerVersion
+  Match:
+    $ref: ./schemas/match.yaml#/Match
+  MatchStats:
+    $ref: ./schemas/match.yaml#/MatchStats
+  MatchPlayer:
+    $ref: ./schemas/matchPlayer.yaml#/MatchPlayer
+  Player:
+    $ref: ./schemas/matchPlayer.yaml#/Player
+  PlayerMatchStats:
+    $ref: ./schemas/matchPlayer.yaml#/PlayerMatchStats
+  Container:
+    $ref: ./schemas/container.yaml#/Container
+  ContainerInteraction:
+    $ref: ./schemas/container.yaml#/ContainerInteraction
+  Reward:
+    $ref: ./schemas/reward.yaml#/Reward
+  RewardType:
+    $ref: ./schemas/reward.yaml#/RewardType
+  Vehicle:
+    $ref: ./schemas/vehicle.yaml#/Vehicle
+  PlayerVehicleUsage:
+    $ref: ./schemas/vehicle.yaml#/PlayerVehicleUsage
+  POI:
+    $ref: ./schemas/poi.yaml#/POI
+  PlayerPOIVisit:
+    $ref: ./schemas/poi.yaml#/PlayerPOIVisit
+  SafeZonePhase:
+    $ref: ./schemas/safeZonePhase.yaml#/SafeZonePhase
+

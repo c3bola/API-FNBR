@@ -1,0 +1,18 @@
+ProviderAuthPayload:
+  type: object
+  required:
+    - accessToken
+  properties:
+    accessToken:
+      type: string
+      description: Token de acesso ou código de autorização fornecido pelo provedor.
+    providerUserId:
+      type: string
+      description: ID do usuário na plataforma terceira (opcional, depende do fluxo do provedor).
+    email:
+      type: string
+      format: email
+      description: E-mail retornado pelo provedor (opcional).
+    username:
+      type: string
+      description: Nome de usuário / gamertag (opcional).

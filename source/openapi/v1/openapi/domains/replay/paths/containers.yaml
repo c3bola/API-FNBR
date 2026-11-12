@@ -1,0 +1,71 @@
+/matches/{matchId}/containers:
+  get:
+    summary: Lists container instances observed in a match.
+    operationId: matchesMatchIdContainersGet
+    tags:
+    - Containers
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: matchId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    - in: query
+      name: containerKind
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Match-scoped container instances.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/container.yaml#/Container
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Match not found.
+
+/matches/{matchId}/container-interactions:
+  get:
+    summary: Lists container interactions observed in a match.
+    operationId: matchesMatchIdContainerInteractionsGet
+    tags:
+    - Containers
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: matchId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    - in: query
+      name: containerId
+      schema:
+        type: integer
+        format: int64
+    - in: query
+      name: matchPlayerId
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Replay-observed interactions; they do not imply unobserved reuse.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/container.yaml#/ContainerInteraction
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Match not found.

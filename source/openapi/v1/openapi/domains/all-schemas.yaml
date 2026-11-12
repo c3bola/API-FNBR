@@ -3,6 +3,9 @@ schemas:
   TelegramAuthPayload:
     $ref: ./auth/schemas/telegramAuthPayload.yaml#/TelegramAuthPayload
 
+  ProviderAuthPayload:
+    $ref: ./auth/schemas/providerAuthPayload.yaml#/ProviderAuthPayload
+
   SessionContext:
     $ref: ./auth/schemas/sessionContext.yaml#/SessionContext
 
@@ -116,3 +119,57 @@ schemas:
     
   Content:
     $ref: ./contents/schemas/content.yaml
+
+  ReplayFile:
+    $ref: ./replay/schemas/replayFile.yaml#/ReplayFile
+
+  ReplayFileRegistration:
+    $ref: ./replay/schemas/replayFile.yaml#/ReplayFileRegistration
+
+  ReplayProcessingAttempt:
+    $ref: ./replay/schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+
+  AnalyzerVersion:
+    $ref: ./replay/schemas/replayProcessingAttempt.yaml#/AnalyzerVersion
+
+  Match:
+    $ref: ./replay/schemas/match.yaml#/Match
+
+  MatchStats:
+    $ref: ./replay/schemas/match.yaml#/MatchStats
+
+  MatchPlayer:
+    $ref: ./replay/schemas/matchPlayer.yaml#/MatchPlayer
+
+  Player:
+    $ref: ./replay/schemas/matchPlayer.yaml#/Player
+
+  PlayerMatchStats:
+    $ref: ./replay/schemas/matchPlayer.yaml#/PlayerMatchStats
+
+  Container:
+    $ref: ./replay/schemas/container.yaml#/Container
+
+  ContainerInteraction:
+    $ref: ./replay/schemas/container.yaml#/ContainerInteraction
+
+  Reward:
+    $ref: ./replay/schemas/reward.yaml#/Reward
+
+  RewardType:
+    $ref: ./replay/schemas/reward.yaml#/RewardType
+
+  Vehicle:
+    $ref: ./replay/schemas/vehicle.yaml#/Vehicle
+
+  PlayerVehicleUsage:
+    $ref: ./replay/schemas/vehicle.yaml#/PlayerVehicleUsage
+
+  POI:
+    $ref: ./replay/schemas/poi.yaml#/POI
+
+  PlayerPOIVisit:
+    $ref: ./replay/schemas/poi.yaml#/PlayerPOIVisit
+
+  SafeZonePhase:
+    $ref: ./replay/schemas/safeZonePhase.yaml#/SafeZonePhase

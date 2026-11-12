@@ -1,0 +1,115 @@
+/replay-files:
+  get:
+    summary: Lists registered Replay files.
+    operationId: replayFilesGet
+    tags:
+    - Replay Files
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: query
+      name: sha256
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{64}$'
+      description: Filters by the file's SHA-256 hash.
+    - in: query
+      name: matchId
+      schema:
+        type: integer
+        format: int64
+      description: Filters by the associated match.
+    responses:
+      '200':
+        description: Replay files matching the filters.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/replayFile.yaml#/ReplayFile
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+  post:
+    summary: Registers Replay file metadata by its SHA-256 hash.
+    description: Registers metadata only; the database does not store Replay file contents.
+    operationId: replayFilesPost
+    tags:
+    - Replay Files
+    security:
+    - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/replayFile.yaml#/ReplayFileRegistration
+    responses:
+      '201':
+        description: Replay file metadata registered.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayFile.yaml#/ReplayFile
+      '400':
+        description: Invalid Replay file metadata.
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '409':
+        description: A Replay file with this SHA-256 hash is already registered.
+
+/replay-files/{sha256}:
+  get:
+    summary: Gets Replay file metadata by its SHA-256 hash.
+    operationId: replayFilesSha256Get
+    tags:
+    - Replay Files
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: sha256
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{64}$'
+    responses:
+      '200':
+        description: Replay file metadata.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayFile.yaml#/ReplayFile
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Replay file not found.
+
+/replay-files/{sha256}/processing-attempts:
+  get:
+    summary: Lists processing attempts for a Replay file.
+    operationId: replayFilesSha256ProcessingAttemptsGet
+    tags:
+    - Replay Files
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: sha256
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{64}$'
+    responses:
+      '200':
+        description: Processing attempts in recorded history.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Replay file not found.

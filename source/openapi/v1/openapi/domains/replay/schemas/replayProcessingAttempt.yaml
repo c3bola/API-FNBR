@@ -1,0 +1,59 @@
+AnalyzerVersion:
+  type: object
+  required:
+  - id
+  - createdAt
+  - applicationVersion
+  - analyzerVersion
+  - parserName
+  - parserVersion
+  properties:
+    id:
+      type: integer
+      format: int64
+    createdAt:
+      type: string
+      format: date-time
+    applicationVersion:
+      type: string
+      maxLength: 50
+    analyzerVersion:
+      type: string
+      maxLength: 50
+    parserName:
+      type: string
+      maxLength: 100
+    parserVersion:
+      type: string
+      maxLength: 100
+    description:
+      type: string
+      nullable: true
+
+ReplayProcessingAttempt:
+  type: object
+  required:
+  - id
+  - startedAt
+  - status
+  - analyzerVersion
+  properties:
+    id:
+      type: integer
+      format: int64
+    startedAt:
+      type: string
+      format: date-time
+    completedAt:
+      type: string
+      format: date-time
+      nullable: true
+    status:
+      type: string
+      enum:
+      - processing
+      - success
+      - failed
+      - skipped
+    analyzerVersion:
+      $ref: '#/AnalyzerVersion'

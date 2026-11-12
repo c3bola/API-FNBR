@@ -1,0 +1,43 @@
+/auth/{provider}:
+  post:
+    summary: Autentica ou registra um usuário via provedor externo (OAuth2/SSO).
+    operationId: authProviderPost
+    tags:
+      - Auth
+    security: []
+    parameters:
+      - in: path
+        name: provider
+        required: true
+        schema:
+          type: string
+          enum:
+            - epic
+            - telegram
+            - playstation
+            - xbox
+            - google
+            - discord
+        description: O nome do provedor de identidade.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/providerAuthPayload.yaml#/ProviderAuthPayload
+    responses:
+      '200':
+        description: Autenticação bem-sucedida. Retorna o JWT da API e dados da sessão.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                user:
+                  $ref: ../schemas/userContext.yaml#/UserContext
+      '400':
+        description: Payload inválido ou token ausente.
+      '401':
+        description: Falha na validação do token junto ao provedor.

@@ -1,0 +1,122 @@
+/players:
+  get:
+    summary: Lists globally identified players.
+    operationId: replayPlayersGet
+    tags:
+    - Players
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: query
+      name: epicId
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{32}$'
+      description: Filters by Epic ID.
+    - in: query
+      name: botId
+      schema:
+        type: string
+      description: Filters by Bot ID; distinct from Epic ID.
+    - in: query
+      name: displayName
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Globally identified players matching the filters.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/matchPlayer.yaml#/Player
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+
+/players/{playerId}:
+  get:
+    summary: Gets a globally identified player.
+    operationId: replayPlayersPlayerIdGet
+    tags:
+    - Players
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: playerId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Player identity.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/matchPlayer.yaml#/Player
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Player not found.
+
+/players/{playerId}/matches:
+  get:
+    summary: Lists matches played by a globally identified player.
+    operationId: replayPlayersPlayerIdMatchesGet
+    tags:
+    - Players
+    - Matches
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: playerId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Matches in which this player has a recorded participant identity.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/match.yaml#/Match
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Player not found.
+
+/players/{playerId}/stats:
+  get:
+    summary: Lists this player's recorded statistics per match.
+    description: Returns per-match values, not an aggregate profile; values come from participant records.
+    operationId: replayPlayersPlayerIdStatsGet
+    tags:
+    - Players
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: playerId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Per-match statistics for this player.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/matchPlayer.yaml#/PlayerMatchStats
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Player not found.

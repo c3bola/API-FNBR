@@ -1,0 +1,61 @@
+ReplayFile:
+  type: object
+  required:
+  - id
+  - fileSha256
+  - fileName
+  - createdAt
+  properties:
+    id:
+      type: integer
+      format: int64
+    fileSha256:
+      type: string
+      pattern: '^[a-f0-9]{64}$'
+      description: Unique SHA-256 identifier for the Replay file.
+    matchId:
+      type: integer
+      format: int64
+      nullable: true
+      description: At most one Replay file can be associated with a match under the current database constraint.
+    successfulAttemptId:
+      type: integer
+      format: int64
+      nullable: true
+    fileSizeBytes:
+      type: integer
+      format: int64
+      nullable: true
+      minimum: 0
+    fileCreatedAt:
+      type: string
+      format: date-time
+      nullable: true
+    createdAt:
+      type: string
+      format: date-time
+    fileName:
+      type: string
+
+ReplayFileRegistration:
+  type: object
+  required:
+  - fileSha256
+  - fileName
+  properties:
+    fileSha256:
+      type: string
+      pattern: '^[a-f0-9]{64}$'
+      description: Unique SHA-256 identifier for the Replay file.
+    fileName:
+      type: string
+      maxLength: 255
+    fileSizeBytes:
+      type: integer
+      format: int64
+      nullable: true
+      minimum: 0
+    fileCreatedAt:
+      type: string
+      format: date-time
+      nullable: true

@@ -1,0 +1,61 @@
+Vehicle:
+  type: object
+  required:
+  - id
+  - createdAt
+  - vehicleCode
+  properties:
+    id:
+      type: integer
+      format: int64
+    createdAt:
+      type: string
+      format: date-time
+    vehicleCode:
+      type: string
+      maxLength: 150
+    displayName:
+      type: string
+      nullable: true
+      maxLength: 150
+    vehicleClass:
+      type: string
+      nullable: true
+      maxLength: 80
+
+PlayerVehicleUsage:
+  type: object
+  required:
+  - id
+  - matchId
+  - matchPlayerId
+  - vehicleId
+  - usageCount
+  properties:
+    id:
+      type: integer
+      format: int64
+    matchId:
+      type: integer
+      format: int64
+    matchPlayerId:
+      type: integer
+      format: int64
+    vehicleId:
+      type: integer
+      format: int64
+    firstUsedSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    lastUsedSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+      description: Null when the last-used time is unknown; this is not an exit timestamp.
+    usageCount:
+      type: integer
+      format: int32
+      minimum: 1

@@ -1,0 +1,278 @@
+Player:
+  type: object
+  required:
+  - id
+  - firstSeenAt
+  - lastSeenAt
+  - createdAt
+  - updatedAt
+  - isBot
+  properties:
+    id:
+      type: integer
+      format: int64
+    firstSeenAt:
+      type: string
+      format: date-time
+    lastSeenAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    isBot:
+      type: boolean
+    epicId:
+      type: string
+      nullable: true
+      pattern: '^[a-f0-9]{32}$'
+      description: Present for a non-bot global identity.
+    botId:
+      type: string
+      nullable: true
+      maxLength: 200
+      description: Present for a bot identity and distinct from Epic ID.
+    platformUniqueNetId:
+      type: string
+      nullable: true
+      maxLength: 150
+      description: Not a unique player identity key.
+    currentDisplayName:
+      type: string
+      nullable: true
+      maxLength: 150
+    platform:
+      type: string
+      nullable: true
+      maxLength: 80
+
+MatchPlayer:
+  type: object
+  required:
+  - id
+  - matchId
+  - playerType
+  - cosmetics
+  properties:
+    id:
+      type: integer
+      format: int64
+    matchId:
+      type: integer
+      format: int64
+    playerId:
+      type: integer
+      format: int64
+      nullable: true
+      description: Null when no global player identity is linked.
+    totalTraveled:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    deathTimeSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    teamIndex:
+      type: integer
+      format: int32
+      nullable: true
+      description: Recorded in-match team value; it does not establish party membership.
+    playerNumber:
+      type: integer
+      format: int32
+      nullable: true
+    placement:
+      type: integer
+      format: int32
+      nullable: true
+    kills:
+      type: integer
+      format: int32
+      nullable: true
+    teamKills:
+      type: integer
+      format: int32
+      nullable: true
+    assists:
+      type: integer
+      format: int32
+      nullable: true
+    weaponDamage:
+      type: integer
+      format: int32
+      nullable: true
+    otherDamage:
+      type: integer
+      format: int32
+      nullable: true
+    revives:
+      type: integer
+      format: int32
+      nullable: true
+    damageTaken:
+      type: integer
+      format: int32
+      nullable: true
+    damageToStructures:
+      type: integer
+      format: int32
+      nullable: true
+    materialsGathered:
+      type: integer
+      format: int32
+      nullable: true
+    materialsUsed:
+      type: integer
+      format: int32
+      nullable: true
+    deathCause:
+      type: integer
+      format: int32
+      nullable: true
+    deathCircumstance:
+      type: integer
+      format: int32
+      nullable: true
+    level:
+      type: integer
+      format: int32
+      nullable: true
+    seasonLevel:
+      type: integer
+      format: int32
+      nullable: true
+    isReplayOwner:
+      type: boolean
+      nullable: true
+    isGameSessionOwner:
+      type: boolean
+      nullable: true
+    isPartyLeader:
+      type: boolean
+      nullable: true
+    isAnonymous:
+      type: boolean
+      nullable: true
+    hasFinishedLoading:
+      type: boolean
+      nullable: true
+    hasStartedPlaying:
+      type: boolean
+      nullable: true
+    replayPlayerId:
+      type: string
+      nullable: true
+      maxLength: 200
+    playerType:
+      type: string
+      enum:
+      - player
+      - bot
+      - named_bot
+      - unknown
+    platform:
+      type: string
+      nullable: true
+      maxLength: 80
+    cosmetics:
+      type: object
+      additionalProperties: true
+
+PlayerMatchStats:
+  type: object
+  required:
+  - matchId
+  - matchPlayerId
+  properties:
+    matchId:
+      type: integer
+      format: int64
+    matchPlayerId:
+      type: integer
+      format: int64
+    matchStartAt:
+      type: string
+      format: date-time
+      nullable: true
+    playerNumber:
+      type: integer
+      format: int32
+      nullable: true
+    teamIndex:
+      type: integer
+      format: int32
+      nullable: true
+    placement:
+      type: integer
+      format: int32
+      nullable: true
+    totalTraveled:
+      type: number
+      format: double
+      nullable: true
+    deathTimeSeconds:
+      type: number
+      format: double
+      nullable: true
+    kills:
+      type: integer
+      format: int32
+      nullable: true
+    teamKills:
+      type: integer
+      format: int32
+      nullable: true
+    assists:
+      type: integer
+      format: int32
+      nullable: true
+    weaponDamage:
+      type: integer
+      format: int32
+      nullable: true
+    otherDamage:
+      type: integer
+      format: int32
+      nullable: true
+    revives:
+      type: integer
+      format: int32
+      nullable: true
+    damageTaken:
+      type: integer
+      format: int32
+      nullable: true
+    damageToStructures:
+      type: integer
+      format: int32
+      nullable: true
+    materialsGathered:
+      type: integer
+      format: int32
+      nullable: true
+    materialsUsed:
+      type: integer
+      format: int32
+      nullable: true
+    deathCause:
+      type: integer
+      format: int32
+      nullable: true
+    deathCircumstance:
+      type: integer
+      format: int32
+      nullable: true
+    level:
+      type: integer
+      format: int32
+      nullable: true
+    seasonLevel:
+      type: integer
+      format: int32
+      nullable: true

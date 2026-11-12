@@ -26,6 +26,22 @@ tags:
   description: Automated giveaway creation and execution
 - name: Resources
   description: Bot modules, commands, responses, and dynamic variables
+- name: Replay Files
+  description: Replay file metadata and processing history
+- name: Matches
+  description: Fortnite matches and match participants
+- name: Players
+  description: Player identities and per-match statistics
+- name: Containers
+  description: Replay-observed containers and interactions
+- name: Rewards
+  description: Replay-observed rewards and reward types
+- name: Vehicles
+  description: Vehicle catalog and player usage summaries
+- name: POIs
+  description: Points of interest and consolidated player visits
+- name: Safe Zones
+  description: Match storm phases
 paths:
   $ref: ./domains/all-paths.yaml#/paths
 components:

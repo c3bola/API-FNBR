@@ -1,0 +1,162 @@
+/matches:
+  get:
+    summary: Lists matches identified in Replay files.
+    operationId: matchesGet
+    tags:
+    - Matches
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: query
+      name: seasonCode
+      schema:
+        type: string
+    - in: query
+      name: mapCode
+      schema:
+        type: string
+    - in: query
+      name: playlist
+      schema:
+        type: string
+    - in: query
+      name: matchStartFrom
+      schema:
+        type: string
+        format: date-time
+    - in: query
+      name: matchStartTo
+      schema:
+        type: string
+        format: date-time
+    responses:
+      '200':
+        description: Matches matching the filters.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/match.yaml#/Match
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+
+/matches/{matchId}:
+  get:
+    summary: Gets match details.
+    operationId: matchesMatchIdGet
+    tags:
+    - Matches
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: matchId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Match details.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/match.yaml#/Match
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Match not found.
+
+/matches/{matchId}/stats:
+  get:
+    summary: Gets the match-level statistics payload.
+    description: The optional matchPlayerId is included only when the stored payload references a participant.
+    operationId: matchesMatchIdStatsGet
+    tags:
+    - Matches
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: matchId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Match-level statistics.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/match.yaml#/MatchStats
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Match or match statistics not found.
+
+/matches/{matchId}/players:
+  get:
+    summary: Lists participants and their per-match statistics.
+    description: Team index groups participants by the recorded team value and does not imply party membership.
+    operationId: matchesMatchIdPlayersGet
+    tags:
+    - Matches
+    - Players
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: matchId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Participants recorded for this match, including unknown identities.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: ../schemas/matchPlayer.yaml#/MatchPlayer
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Match not found.
+
+/matches/{matchId}/players/{matchPlayerId}:
+  get:
+    summary: Gets a participant recorded in a match.
+    operationId: matchesMatchIdPlayersMatchPlayerIdGet
+    tags:
+    - Matches
+    - Players
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: matchId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    - in: path
+      name: matchPlayerId
+      required: true
+      schema:
+        type: integer
+        format: int64
+    responses:
+      '200':
+        description: Match participant and its recorded statistics.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/matchPlayer.yaml#/MatchPlayer
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: Match participant not found.
