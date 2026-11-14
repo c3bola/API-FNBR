@@ -30,12 +30,16 @@
                 $ref: ../schemas/replayFile.yaml#/ReplayFile
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
   post:
     summary: Registers Replay file metadata by its SHA-256 hash.
-    description: Registers metadata only; the database does not store Replay file contents.
+    description: Registers Replay file metadata idempotently; the database does not store Replay file contents.
     operationId: replayFilesPost
     tags:
-    - Replay Files
+    - Replay Ingestion
     security:
     - bearerAuth: []
     requestBody:
@@ -51,12 +55,20 @@
           application/json:
             schema:
               $ref: ../schemas/replayFile.yaml#/ReplayFile
+      '200':
+        description: Matching Replay file metadata was already registered.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayFile.yaml#/ReplayFile
       '400':
-        description: Invalid Replay file metadata.
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '409':
-        description: A Replay file with this SHA-256 hash is already registered.
+        $ref: ../../../components/responses.yaml#/responses/Conflict
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
 /replay-files/{sha256}:
   get:
@@ -83,7 +95,11 @@
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
-        description: Replay file not found.
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
 /replay-files/{sha256}/processing-attempts:
   get:
@@ -112,4 +128,67 @@
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
-        description: Replay file not found.
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+  post:
+    summary: Ingests the extracted data for a registered Replay file.
+    description: >
+      Creates a processing attempt and atomically persists the match snapshot and
+      Replay-observed records. Reusing an idempotency key with the same payload
+      returns the original attempt; use a new key to explicitly reprocess.
+    operationId: replayFilesSha256ProcessingAttemptsPost
+    tags:
+    - Replay Ingestion
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: sha256
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{64}$'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/ingestion.yaml#/ReplayIngestionRequest
+    responses:
+      '201':
+        description: A new processing attempt completed successfully.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '200':
+        description: The idempotency key already has a completed attempt.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '202':
+        description: The same idempotent request is already being processed.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '422':
+        description: The attempt was recorded as failed and its derived-data transaction was rolled back.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '409':
+        $ref: ../../../components/responses.yaml#/responses/Conflict
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError

@@ -1,0 +1,15 @@
+ReplayError:
+  type: object
+  additionalProperties: false
+  required:
+  - statusCode
+  - message
+  - error
+  properties:
+    statusCode:
+      type: integer
+      format: int32
+    message:
+      type: string
+    error:
+      type: string

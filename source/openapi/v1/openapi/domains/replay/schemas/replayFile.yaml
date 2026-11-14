@@ -17,7 +17,7 @@ ReplayFile:
       type: integer
       format: int64
       nullable: true
-      description: At most one Replay file can be associated with a match under the current database constraint.
+      description: A match may be associated with multiple Replay files.
     successfulAttemptId:
       type: integer
       format: int64
@@ -39,6 +39,7 @@ ReplayFile:
 
 ReplayFileRegistration:
   type: object
+  additionalProperties: false
   required:
   - fileSha256
   - fileName

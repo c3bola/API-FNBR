@@ -1,3 +1,31 @@
 responses:
   Unauthorized:
     description: Missing or invalid authentication token.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+  BadRequest:
+    description: The request is invalid.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+  NotFound:
+    description: The requested Replay resource was not found.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+  Conflict:
+    description: The request conflicts with the current Replay state.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+  InternalServerError:
+    description: The server could not complete the request.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError

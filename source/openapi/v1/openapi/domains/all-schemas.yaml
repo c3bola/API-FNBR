@@ -123,11 +123,50 @@ schemas:
   ReplayFile:
     $ref: ./replay/schemas/replayFile.yaml#/ReplayFile
 
+  ReplayError:
+    $ref: ./replay/schemas/replayError.yaml#/ReplayError
+
   ReplayFileRegistration:
     $ref: ./replay/schemas/replayFile.yaml#/ReplayFileRegistration
 
   ReplayProcessingAttempt:
     $ref: ./replay/schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+
+  ReplayIngestionRequest:
+    $ref: ./replay/schemas/ingestion.yaml#/ReplayIngestionRequest
+
+  ReplayAnalyzerVersionInput:
+    $ref: ./replay/schemas/ingestion.yaml#/ReplayAnalyzerVersionInput
+
+  MatchIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/MatchIngestion
+
+  MatchPlayerIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/MatchPlayerIngestion
+
+  MatchStatsIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/MatchStatsIngestion
+
+  ContainerIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/ContainerIngestion
+
+  ContainerInteractionIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/ContainerInteractionIngestion
+
+  RewardIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/RewardIngestion
+
+  VehicleUsageIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/VehicleUsageIngestion
+
+  POIIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/POIIngestion
+
+  POIVisitIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/POIVisitIngestion
+
+  SafeZonePhaseIngestion:
+    $ref: ./replay/schemas/ingestion.yaml#/SafeZonePhaseIngestion
 
   AnalyzerVersion:
     $ref: ./replay/schemas/replayProcessingAttempt.yaml#/AnalyzerVersion

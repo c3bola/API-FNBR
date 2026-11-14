@@ -37,6 +37,7 @@ ReplayProcessingAttempt:
   - startedAt
   - status
   - analyzerVersion
+  - idempotencyKey
   properties:
     id:
       type: integer
@@ -55,5 +56,12 @@ ReplayProcessingAttempt:
       - success
       - failed
       - skipped
+    idempotencyKey:
+      type: string
+      maxLength: 100
+    errorMessage:
+      type: string
+      nullable: true
+      description: Sanitized processing failure summary; never contains SQL or stack traces.
     analyzerVersion:
       $ref: '#/AnalyzerVersion'

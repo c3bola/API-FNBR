@@ -95,3 +95,25 @@ Domain files are aggregators and do not need to be complete OpenAPI documents. T
 ## Compatibility note
 
 API field names and existing enum values are intentionally preserved, including values currently used by the backend such as `pt-BR`, `Geral`, `Membro`, and other domain literals. These are contract values rather than documentation text; translating them would change the API contract. Human-readable summaries, descriptions, and comments are written in English.
+
+## Replay ingestion diagnostics
+
+The backend emits JSON `replay_ingestion` events with the file SHA-256, attempt ID
+(null until allocated), stage and result. A successful stage is not durable until
+`data_transaction_commit` succeeds. Failure events include the original error
+message and stack, and PostgreSQL SQLSTATE and constraint where available.
+Payloads, SQL parameters, PostgreSQL detail fields and credentials are not
+intentionally logged. Error messages may nevertheless contain database values:
+restrict log access and retention accordingly.
+
+A failed attempt remains in the history. Reusing its idempotency key and the
+same request returns that failed attempt; use a new key for an explicit retry.
+An in-progress attempt may instead be resumed if its advisory lock is no longer
+held. Never delete attempts to retry.
+
+The PostgreSQL integration test is opt-in. Prepare an isolated local database
+named `replay_ingestion_test` with the three replay schema scripts applied, then
+set `REPLAY_TEST_DATABASE_URL` to that database and run
+`node --test test/replays.postgres.test.cjs` from `source` after compilation.
+The test inserts fixtures and must never target a production database. Schema
+scripts are not applied by the test.

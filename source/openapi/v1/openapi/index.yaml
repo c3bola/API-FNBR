@@ -28,6 +28,8 @@ tags:
   description: Bot modules, commands, responses, and dynamic variables
 - name: Replay Files
   description: Replay file metadata and processing history
+- name: Replay Ingestion
+  description: Authenticated write operations for Replay file ingestion
 - name: Matches
   description: Fortnite matches and match participants
 - name: Players

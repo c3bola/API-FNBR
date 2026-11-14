@@ -1,0 +1,660 @@
+ReplayIngestionRequest:
+  type: object
+  additionalProperties: false
+  required:
+  - idempotencyKey
+  - analyzerVersion
+  - match
+  - matchPlayers
+  properties:
+    idempotencyKey:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: Stable key for retrying the same request; use a new key for a deliberate reprocess.
+    analyzerVersion:
+      $ref: '#/ReplayAnalyzerVersionInput'
+    match:
+      $ref: '#/MatchIngestion'
+    matchPlayers:
+      type: array
+      items:
+        $ref: '#/MatchPlayerIngestion'
+    matchStats:
+      $ref: '#/MatchStatsIngestion'
+    containers:
+      type: array
+      items:
+        $ref: '#/ContainerIngestion'
+    rewards:
+      type: array
+      items:
+        $ref: '#/RewardIngestion'
+    vehicleUsages:
+      type: array
+      items:
+        $ref: '#/VehicleUsageIngestion'
+    pois:
+      type: array
+      items:
+        $ref: '#/POIIngestion'
+    poiVisits:
+      type: array
+      items:
+        $ref: '#/POIVisitIngestion'
+    safeZonePhases:
+      type: array
+      items:
+        $ref: '#/SafeZonePhaseIngestion'
+
+ReplayAnalyzerVersionInput:
+  type: object
+  additionalProperties: false
+  required:
+  - applicationVersion
+  - analyzerVersion
+  - parserName
+  - parserVersion
+  properties:
+    applicationVersion:
+      type: string
+      maxLength: 50
+    analyzerVersion:
+      type: string
+      maxLength: 50
+    parserName:
+      type: string
+      maxLength: 100
+    parserVersion:
+      type: string
+      maxLength: 100
+    description:
+      type: string
+      nullable: true
+
+MatchIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - matchKey
+  properties:
+    matchKey:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Stable match identity shared by Replay files belonging to the same match.
+    matchStartAt:
+      type: string
+      format: date-time
+      nullable: true
+    matchEndAt:
+      type: string
+      format: date-time
+      nullable: true
+    durationSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    totalPlayers:
+      type: integer
+      format: int32
+      nullable: true
+      minimum: 0
+    totalTeams:
+      type: integer
+      format: int32
+      nullable: true
+      minimum: 0
+    chapterNumber:
+      type: integer
+      format: int32
+      nullable: true
+    isCustomMatch:
+      type: boolean
+      nullable: true
+    sessionId:
+      type: string
+      nullable: true
+      maxLength: 150
+    playlist:
+      type: string
+      nullable: true
+      maxLength: 150
+    gameMode:
+      type: string
+      nullable: true
+      maxLength: 100
+    mapCode:
+      type: string
+      nullable: true
+      maxLength: 100
+    mapName:
+      type: string
+      nullable: true
+      maxLength: 150
+    seasonCode:
+      type: string
+      nullable: true
+      maxLength: 80
+    gameVersion:
+      type: string
+      nullable: true
+      maxLength: 80
+
+MatchPlayerIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - sourcePlayerKey
+  - playerType
+  properties:
+    sourcePlayerKey:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Stable identifier for this participant in this Replay payload, not a global player identity.
+    playerType:
+      type: string
+      enum:
+      - player
+      - bot
+      - named_bot
+      - unknown
+    epicId:
+      type: string
+      nullable: true
+      pattern: '^[a-f0-9]{32}$'
+    botId:
+      type: string
+      nullable: true
+      maxLength: 200
+    platformUniqueNetId:
+      type: string
+      nullable: true
+      maxLength: 150
+    currentDisplayName:
+      type: string
+      nullable: true
+      maxLength: 150
+    platform:
+      type: string
+      nullable: true
+      maxLength: 80
+    totalTraveled:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    deathTimeSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    teamIndex:
+      type: integer
+      format: int32
+      nullable: true
+    playerNumber:
+      type: integer
+      format: int32
+      nullable: true
+    placement:
+      type: integer
+      format: int32
+      nullable: true
+    kills:
+      type: integer
+      format: int32
+      nullable: true
+    teamKills:
+      type: integer
+      format: int32
+      nullable: true
+    assists:
+      type: integer
+      format: int32
+      nullable: true
+    weaponDamage:
+      type: integer
+      format: int32
+      nullable: true
+    otherDamage:
+      type: integer
+      format: int32
+      nullable: true
+    revives:
+      type: integer
+      format: int32
+      nullable: true
+    damageTaken:
+      type: integer
+      format: int32
+      nullable: true
+    damageToStructures:
+      type: integer
+      format: int32
+      nullable: true
+    materialsGathered:
+      type: integer
+      format: int32
+      nullable: true
+    materialsUsed:
+      type: integer
+      format: int32
+      nullable: true
+    deathCause:
+      type: integer
+      format: int32
+      nullable: true
+    deathCircumstance:
+      type: integer
+      format: int32
+      nullable: true
+    level:
+      type: integer
+      format: int32
+      nullable: true
+    seasonLevel:
+      type: integer
+      format: int32
+      nullable: true
+    isReplayOwner:
+      type: boolean
+      nullable: true
+    isGameSessionOwner:
+      type: boolean
+      nullable: true
+    isPartyLeader:
+      type: boolean
+      nullable: true
+    isAnonymous:
+      type: boolean
+      nullable: true
+    hasFinishedLoading:
+      type: boolean
+      nullable: true
+    hasStartedPlaying:
+      type: boolean
+      nullable: true
+    replayPlayerId:
+      type: string
+      nullable: true
+      maxLength: 200
+    cosmetics:
+      type: object
+      additionalProperties: true
+
+MatchStatsIngestion:
+  type: object
+  additionalProperties: false
+  properties:
+    sourcePlayerKey:
+      type: string
+      nullable: true
+      maxLength: 200
+      description: Optional only when the Replay explicitly associates the global payload with a participant.
+    totalTraveled:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    accuracy:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    unknown:
+      type: integer
+      format: int32
+      nullable: true
+    assists:
+      type: integer
+      format: int32
+      nullable: true
+    eliminations:
+      type: integer
+      format: int32
+      nullable: true
+    weaponDamage:
+      type: integer
+      format: int32
+      nullable: true
+    otherDamage:
+      type: integer
+      format: int32
+      nullable: true
+    revives:
+      type: integer
+      format: int32
+      nullable: true
+    damageTaken:
+      type: integer
+      format: int32
+      nullable: true
+    damageToStructures:
+      type: integer
+      format: int32
+      nullable: true
+    materialsGathered:
+      type: integer
+      format: int32
+      nullable: true
+    materialsUsed:
+      type: integer
+      format: int32
+      nullable: true
+
+ContainerIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - sourceId
+  - containerKind
+  properties:
+    sourceId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    containerKind:
+      type: string
+      maxLength: 80
+    blueprint:
+      type: string
+      nullable: true
+      maxLength: 255
+    replayActorId:
+      type: string
+      nullable: true
+      maxLength: 200
+    locationX:
+      type: number
+      format: double
+      nullable: true
+    locationY:
+      type: number
+      format: double
+      nullable: true
+    locationZ:
+      type: number
+      format: double
+      nullable: true
+    firstSeenSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    interactions:
+      type: array
+      items:
+        $ref: '#/ContainerInteractionIngestion'
+
+ContainerInteractionIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - sourceId
+  - eventTimeSeconds
+  - isRefillReopen
+  - interactionType
+  properties:
+    sourceId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    sourcePlayerKey:
+      type: string
+      nullable: true
+      maxLength: 200
+    eventTimeSeconds:
+      type: number
+      format: double
+      minimum: 0
+    isRefillReopen:
+      type: boolean
+      default: false
+    interactionType:
+      type: string
+      enum:
+      - opened
+      - destroyed
+      - searched
+      - unknown
+    sourceConfidence:
+      type: string
+      nullable: true
+      maxLength: 20
+
+RewardIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - sourceId
+  - prizeId
+  - isTeammateReward
+  properties:
+    sourceId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    prizeId:
+      type: string
+      minLength: 1
+      maxLength: 150
+      description: Original prize identifier from the Replay; it is persisted unchanged.
+    rewardTypeCode:
+      type: string
+      nullable: true
+      maxLength: 150
+      description: Catalog code when known; otherwise the original prizeId is used as a dynamic catalog key.
+    category:
+      type: string
+      nullable: true
+      maxLength: 80
+    displayName:
+      type: string
+      nullable: true
+      maxLength: 150
+    sourcePlayerKey:
+      type: string
+      nullable: true
+      maxLength: 200
+    containerInteractionSourceId:
+      type: string
+      nullable: true
+      maxLength: 200
+    eventTimeSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    isGoldenChest:
+      type: boolean
+      nullable: true
+    isTeammateReward:
+      type: boolean
+    isFromChest:
+      type: boolean
+      nullable: true
+    wasDestroyed:
+      type: boolean
+      nullable: true
+    origin:
+      type: string
+      nullable: true
+      maxLength: 50
+    sourceConfidence:
+      type: string
+      nullable: true
+      maxLength: 20
+
+VehicleUsageIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - sourceId
+  - sourcePlayerKey
+  - vehicleCode
+  properties:
+    sourceId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    sourcePlayerKey:
+      type: string
+      maxLength: 200
+    vehicleCode:
+      type: string
+      maxLength: 150
+    displayName:
+      type: string
+      nullable: true
+      maxLength: 150
+    vehicleClass:
+      type: string
+      nullable: true
+      maxLength: 80
+    replayVehicleId:
+      type: string
+      nullable: true
+      maxLength: 200
+    enteredAtSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    exitedAtSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+
+POIIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - mapCode
+  - poiCode
+  - displayName
+  properties:
+    mapCode:
+      type: string
+      maxLength: 100
+    seasonCode:
+      type: string
+      nullable: true
+      maxLength: 80
+    poiCode:
+      type: string
+      maxLength: 150
+    displayName:
+      type: string
+      maxLength: 150
+    centerX:
+      type: number
+      format: double
+      nullable: true
+    centerY:
+      type: number
+      format: double
+      nullable: true
+    centerZ:
+      type: number
+      format: double
+      nullable: true
+    boundaryRadius:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    coordinateSystem:
+      type: string
+      nullable: true
+      maxLength: 100
+
+POIVisitIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - sourceId
+  - sourcePlayerKey
+  - poiCode
+  - startedAtSeconds
+  - endedAtSeconds
+  - durationSeconds
+  properties:
+    sourceId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    sourcePlayerKey:
+      type: string
+      maxLength: 200
+    poiCode:
+      type: string
+      maxLength: 150
+    seasonCode:
+      type: string
+      nullable: true
+      maxLength: 80
+    startedAtSeconds:
+      type: number
+      format: double
+      minimum: 0
+    endedAtSeconds:
+      type: number
+      format: double
+      minimum: 0
+    durationSeconds:
+      type: number
+      format: double
+      minimum: 0
+    confidence:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+      maximum: 1
+    sampleCount:
+      type: integer
+      format: int32
+      nullable: true
+      minimum: 0
+    detectionMethod:
+      type: string
+      nullable: true
+      maxLength: 50
+
+SafeZonePhaseIngestion:
+  type: object
+  additionalProperties: false
+  required:
+  - phaseNumber
+  properties:
+    phaseNumber:
+      type: integer
+      format: int32
+      minimum: 1
+    startsAtSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    endsAtSeconds:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
+    centerX:
+      type: number
+      format: double
+      nullable: true
+    centerY:
+      type: number
+      format: double
+      nullable: true
+    radius:
+      type: number
+      format: double
+      nullable: true
+      minimum: 0
