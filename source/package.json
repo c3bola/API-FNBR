@@ -6,17 +6,23 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "predev": "npm run generate:api",
     "build": "tsc",
+    "prebuild": "npm run generate:api",
     "clean:api": "rimraf src/generated/v1",
     "pregenerate:api": "npm run clean:api",
     "openapi:bundle": "redocly bundle --config openapi/v1/redocly.yaml openapi/v1/openapi/index.yaml -o openapi/v1/openapi/dist/openapi.yaml",
     "openapi:lint": "redocly lint --config openapi/v1/redocly.yaml openapi/v1/openapi/index.yaml",
     "openapi:build": "npm run openapi:lint && npm run openapi:bundle",
-    "generate:api": "npm run openapi:build && openapi-generator-cli generate -i openapi/v1/openapi/dist/openapi.yaml -g typescript --global-property models -o src/generated/v1",
+    "generate:api": "npm run openapi:build && cd openapi && openapi-generator-cli --openapitools openapitools.json generate -i v1/openapi/dist/openapi.yaml -g typescript-nestjs-server --global-property apis=ReplayFiles:ReplayIngestion,models,supportingFiles -o ../src/generated/v1",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "npm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
+    "@nestjs/common": "^10.4.20",
+    "@nestjs/core": "^10.4.20",
+    "@nestjs/platform-express": "^10.4.20",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -24,8 +30,10 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.23.0",
     "pino": "^9.4.0",
+    "reflect-metadata": "^0.2.2",
     "pino-http": "^10.2.0",
-    "redis": "^6.2.1"
+    "redis": "^6.2.1",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.13.4",
