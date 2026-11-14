@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthService } from './auth.service';
+import { getJwtSecret } from '../../shared/jwt-secret';
 
 const authService = new AuthService();
 
@@ -15,13 +16,25 @@ export class AuthController {
     }
   };
 
+  public authenticateProvider = async (req: Request, res: Response) => {
+    try {
+      const { provider } = req.params;
+      const payload = req.body;
+      
+      const result = await authService.authenticateProvider(provider, payload);
+      res.status(200).json(result);
+    } catch (error: any) {
+      console.error(`[AuthController.authenticateProvider - ${req.params.provider}]`, error);
+      res.status(401).json({ error: error.message || 'Falha na autenticação com o provedor.' });
+    }
+  };
+
   public getMe = async (req: Request, res: Response) => {
     try {
-      // O authMiddleware deve colocar o payload decodificado em req.user
-      // Caso esteja testando via mock e o middleware não esteja configurado, injete '121823278' fixo
-      const telegramId = (req as any).user?.sub || '121823278'; 
+      // O JWT gerado pela nova rota trará o UUID do banco no 'sub'
+      const identifier = (req as any).user?.sub || '121823278'; 
       
-      const sessionContext = await authService.getSessionContext(telegramId);
+      const sessionContext = await authService.getSessionContext(identifier);
       
       if (!sessionContext) {
         return res.status(404).json({ message: 'Usuário não encontrado ou sem permissões.' });
@@ -37,15 +50,14 @@ export class AuthController {
   public mockLogin = (req: Request, res: Response) => {
     const mockUser = {
       id: '123e4567-e89b-12d3-a456-426614174000',
-      name: 'Anezio Luis da Silva Fidalgo',
+      name: 'ContadorDeBau',
       username: 'C3bola',
       role: 'admin'
     };
 
-    const jwtSecret = process.env.JWT_SECRET || 'chave-super-secreta-ambiente-dev';
     const token = jwt.sign(
       { sub: '121823278', username: mockUser.username }, 
-      jwtSecret, 
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 

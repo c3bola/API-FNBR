@@ -34,10 +34,20 @@ app.use('/api/v1/bots', botsRoutes);
 app.use('/api/v1', resourcesRoutes);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(`[Error] ${err.message}`);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined,
+  const isJsonParseError = typeof err === 'object'
+    && err !== null
+    && 'type' in err
+    && err.type === 'entity.parse.failed';
+  const statusCode = isJsonParseError ? 400 : 500;
+  const message = isJsonParseError ? 'Invalid JSON request body.' : 'Internal server error.';
+
+  console.error('[Error] Unhandled request error.', {
+    errorName: err instanceof Error ? err.name : 'UnknownError',
+  });
+  res.status(statusCode).json({
+    statusCode,
+    message,
+    error: isJsonParseError ? 'Bad Request' : 'Internal Server Error',
   });
 });
 

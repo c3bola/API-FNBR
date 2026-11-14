@@ -1,13 +1,16 @@
 // npm run generate:api
 // npm run dev
+import 'reflect-metadata';
 import app from './apifnbr';
 import { testDatabaseConnection, pool } from './infra/database/postgres.config'; 
+import { registerReplayIngestion } from './modules/replays/replays.bootstrap';
 import express from 'express';
 import path from 'path';
 const PORT = process.env.PORT || 3000;
 
 async function bootstrap() {
   await testDatabaseConnection();
+  await registerReplayIngestion(app);
 
   const server = app.listen(PORT, () => {
     console.log(`[Server] Aplicação rodando na porta ${PORT}`);

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { AuthRepository } from './auth.repository';
+import { getJwtSecret } from '../../shared/jwt-secret';
 
 interface TelegramAuthData {
   id: number;
@@ -14,7 +15,7 @@ interface TelegramAuthData {
 
 export class AuthService {
   private readonly botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-  private readonly jwtSecret = process.env.JWT_SECRET || 'chave-super-secreta-ambiente-dev';
+  private readonly jwtSecret = getJwtSecret();
   private authRepository = new AuthRepository();
 
   public authenticate(data: TelegramAuthData): { token: string, admin: any } {
@@ -22,11 +23,7 @@ export class AuthService {
       throw new Error('Assinatura do Telegram inválida.');
     }
 
-    const payload = {
-      sub: data.id.toString(),
-      role: 'Admin'
-    };
-
+    const payload = { sub: data.id.toString(), role: 'Admin' };
     const token = jwt.sign(payload, this.jwtSecret, { expiresIn: '8h' });
 
     return {
@@ -42,16 +39,49 @@ export class AuthService {
     };
   }
 
-  public async getSessionContext(telegramId: string) {
-    const row = await this.authRepository.getUserSessionData(telegramId);
-    
+  public async authenticateProvider(provider: string, payload: any) {
+    // 1. Simulação da validação do Token Externo. 
+    // No futuro, chame as APIs oficiais (ex: axios.get('https://discord.com/api/users/@me'))
+    const providerUserId = payload.providerUserId;
+    if (!providerUserId) {
+      throw new Error('providerUserId é obrigatório (token não validado).');
+    }
+
+    // 2. Busca o usuário por esta identidade
+    let user = await this.authRepository.findUserByProvider(provider, providerUserId);
+
+    // 3. Upsert: Se não existir, registra a conta imediatamente
+    if (!user) {
+      user = await this.authRepository.createUserWithProvider(provider, providerUserId, payload);
+    }
+
+    // 4. Gera JWT utilizando o UUID real da conta no banco
+    const tokenPayload = {
+      sub: user.id_user,
+      provider: provider,
+      role: user.role_name
+    };
+
+    const token = jwt.sign(tokenPayload, this.jwtSecret, { expiresIn: '8h' });
+
+    return {
+      token,
+      user: {
+        id: user.id_user,
+        name: user.name,
+        username: user.username,
+        avatar_url: user.avatar_url,
+        role: user.role_name
+      }
+    };
+  }
+
+  public async getSessionContext(identifier: string) {
+    const row = await this.authRepository.getUserSessionData(identifier);
     if (!row) return null;
 
     return {
-      system: {
-        name: 'FNBR',
-        version: '0.0.1'
-      },
+      system: { name: 'FNBR', version: '0.0.1' },
       user: {
         id: row.id_user,
         name: row.first_name,
@@ -59,7 +89,7 @@ export class AuthService {
         avatar_url: row.photo_url,
         role: row.role_name
       },
-      notifications_count: 0, // Valor estático temporário
+      notifications_count: 0,
       bots_access: row.bots,
       navigation: this.buildNavigation(row.permissions)
     };
@@ -67,7 +97,6 @@ export class AuthService {
 
   private buildNavigation(permissions: any[]) {
     const sectionsMap = new Map<string, any>();
-
     permissions.forEach(p => {
       if (!sectionsMap.has(p.section)) {
         sectionsMap.set(p.section, { section: p.section, items: [] });
@@ -79,13 +108,11 @@ export class AuthService {
         permission: p.code
       });
     });
-
     return Array.from(sectionsMap.values());
   }
 
   private validateTelegramHash(data: TelegramAuthData): boolean {
     const { hash, ...userData } = data;
-
     const dataCheckArr = Object.keys(userData)
       .map(key => `${key}=${(userData as any)[key]}`)
       .sort();
