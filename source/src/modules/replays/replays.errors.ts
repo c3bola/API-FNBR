@@ -4,6 +4,8 @@ export class ReplayNotFoundError extends Error {}
 
 export class ReplayConflictError extends Error {}
 
+export class ReplayPersistenceError extends Error {}
+
 export function logReplayError(
   stage: string,
   fileSha256: string | undefined,

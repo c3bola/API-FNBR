@@ -1,18 +1,21 @@
+import { createHash } from 'crypto';
 import { PoolClient } from 'pg';
 import {
-  AnalyzerVersion,
-  ReplayFile,
-  ReplayFileRegistration,
+  GetReplayFile200Response,
+  ListReplayFileProcessingAttempts200Response,
+  ListReplayFiles200Response,
+  ParserReplayData,
   ReplayIngestionRequest,
   ReplayProcessingAttempt,
 } from '../../generated/v1/models';
 import { pool } from '../../infra/database/postgres.config';
-import { logReplayError, ReplayConflictError, ReplayNotFoundError } from './replays.errors';
-
-export interface ReplayFileRegistrationOutcome {
-  file: ReplayFile;
-  created: boolean;
-}
+import {
+  logReplayError,
+  ReplayConflictError,
+  ReplayNotFoundError,
+  ReplayPersistenceError,
+} from './replays.errors';
+import type { ContainerNormalizationMetrics } from './replays.service';
 
 export type ReplayAttemptOutcomeKind = 'created' | 'replayed' | 'processing' | 'failed';
 
@@ -21,1244 +24,578 @@ export interface ReplayAttemptOutcome {
   outcome: ReplayAttemptOutcomeKind;
 }
 
+export interface ContainerPersistenceMetrics {
+  provided: boolean;
+  detected: number;
+  valid: number;
+  rejected: number;
+  exactDuplicates: number;
+  fieldIssues: number;
+  persisted: number;
+  playerLinked: number;
+  playerUnidentified: number;
+  playerUnmatched: number;
+  rejectionSamples: string[];
+}
+
+export interface ClaimedReplayAttempt {
+  id: number;
+  fileSha256: string;
+  requestSha256: string;
+  payloadSha256: string | null;
+  rawPayload: Buffer | null;
+  workerAttempts: number;
+}
+
+export async function recordMalformedReplayDiagnostic(
+  fileSha256: string,
+  rawPayload: Buffer,
+  applicationId: string | null,
+  idempotencyKey: string | null,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO fortnite_replay.ingestion_diagnostic
+       (file_sha256, application_id, idempotency_key, payload_sha256, original_payload, error_code)
+     VALUES ($1, $2, $3, $4, $5, 'invalid_json')`,
+    [
+      fileSha256,
+      applicationId,
+      idempotencyKey,
+      createHash('sha256').update(rawPayload).digest('hex'),
+      rawPayload,
+    ],
+  );
+}
+
 const SAFE_FAILURE_MESSAGE = 'Replay ingestion failed.';
-
-const FILE_COLUMNS = `
-  id_replay_file, file_sha256, fk_id_match, fk_id_successful_attempt,
-  file_size_bytes, file_created_at, created_at, file_name
+const MAX_PAGE_SIZE = 100;
+const FILE_SELECT = `
+  file.file_sha256,
+  file.first_registered_at,
+  COALESCE(upload.application_ids, ARRAY[]::text[]) AS application_ids,
+  upload.latest_received_at,
+  COALESCE(attempts.attempt_count, 0) AS processing_attempt_count
 `;
-
-const ATTEMPT_COLUMNS = `
-  a.id_attempt, a.started_at, a.completed_at, a.status, a.idempotency_key,
-  a.error_message, a.request_sha256, v.id_analyzer_version,
-  v.created_at AS analyzer_created_at,
-  v.application_version, v.analyzer_version, v.parser_name, v.parser_version,
-  v.description AS analyzer_description
+const ATTEMPT_SELECT = `
+  id, file_sha256, application_id, idempotency_key, request_sha256, payload_sha256,
+  analyzer_version, application_version, parser_name, parser_version,
+  parse_mode, status, error_code, error_message, received_at, started_at, completed_at
 `;
 
 export class ReplaysRepository {
-  async registerFile(input: ReplayFileRegistration): Promise<ReplayFileRegistrationOutcome> {
-    const client = await pool.connect();
+  async listReplayFiles(
+    applicationId: string | undefined,
+    status: string | undefined,
+    page: number,
+    pageSize: number,
+  ): Promise<ListReplayFiles200Response> {
+    const offset = (page - 1) * pageSize;
+    const values: unknown[] = [];
+    const filters: string[] = [];
+    if (applicationId !== undefined) {
+      values.push(applicationId);
+      filters.push(`EXISTS (
+        SELECT 1 FROM fortnite_replay.replay_upload AS filter_upload
+        WHERE filter_upload.file_sha256 = file.file_sha256
+          AND filter_upload.application_id = $${values.length}
+      )`);
+    }
+    if (status === 'unprocessed') {
+      filters.push(`NOT EXISTS (
+        SELECT 1 FROM fortnite_replay.processing_attempt AS filter_attempt
+        WHERE filter_attempt.file_sha256 = file.file_sha256
+      )`);
+    } else if (status !== undefined) {
+      values.push(status);
+      filters.push(`EXISTS (
+        SELECT 1 FROM fortnite_replay.processing_attempt AS filter_attempt
+        WHERE filter_attempt.file_sha256 = file.file_sha256
+          AND filter_attempt.status = $${values.length}
+      )`);
+    }
+    const where = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+    const countResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM fortnite_replay.replay_file AS file ${where}`,
+      values,
+    );
+    values.push(pageSize, offset);
+    const result = await pool.query(
+      `SELECT ${FILE_SELECT}
+       FROM fortnite_replay.replay_file AS file
+       LEFT JOIN LATERAL (
+         SELECT ARRAY_AGG(upload.application_id ORDER BY upload.application_id) AS application_ids,
+                MAX(upload.last_received_at) AS latest_received_at
+         FROM fortnite_replay.replay_upload AS upload
+         WHERE upload.file_sha256 = file.file_sha256
+       ) AS upload ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS attempt_count
+         FROM fortnite_replay.processing_attempt AS attempt
+         WHERE attempt.file_sha256 = file.file_sha256
+       ) AS attempts ON TRUE
+       ${where}
+       ORDER BY file.first_registered_at DESC, file.file_sha256
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values,
+    );
+    return {
+      success: true,
+      data: result.rows.map(mapReplayFile),
+      pagination: pagination(page, pageSize, safeInteger(countResult.rows[0].count, 'file count')),
+    };
+  }
+
+  async getReplayFile(sha256: string): Promise<GetReplayFile200Response> {
+    const result = await pool.query(
+      `SELECT ${FILE_SELECT}
+       FROM fortnite_replay.replay_file AS file
+       LEFT JOIN LATERAL (
+         SELECT ARRAY_AGG(upload.application_id ORDER BY upload.application_id) AS application_ids,
+                MAX(upload.last_received_at) AS latest_received_at
+         FROM fortnite_replay.replay_upload AS upload
+         WHERE upload.file_sha256 = file.file_sha256
+       ) AS upload ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS attempt_count
+         FROM fortnite_replay.processing_attempt AS attempt
+         WHERE attempt.file_sha256 = file.file_sha256
+       ) AS attempts ON TRUE
+       WHERE file.file_sha256 = $1`,
+      [sha256],
+    );
+    if (!result.rows[0]) throw new ReplayNotFoundError('Replay file was not found.');
+    return { success: true, data: mapReplayFile(result.rows[0]) };
+  }
+
+  async listAttempts(
+    sha256: string,
+    status: string | undefined,
+    page: number,
+    pageSize: number,
+  ): Promise<ListReplayFileProcessingAttempts200Response> {
+    return this.listAttemptPage('file_sha256', sha256, status, page, pageSize);
+  }
+
+  async listMatchAttempts(
+    matchId: number,
+    page: number,
+    pageSize: number,
+  ): Promise<ListReplayFileProcessingAttempts200Response> {
+    return this.listAttemptPage('match_id', matchId, undefined, page, pageSize);
+  }
+
+  async accept(
+    fileSha256: string,
+    input: ReplayIngestionRequest,
+    requestSha256: string,
+    payloadSha256: string,
+    rawPayload: Buffer,
+  ): Promise<ReplayAttemptOutcome> {
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      logReplayError('durable_acceptance_connection', fileSha256, undefined, error);
+      throw new ReplayPersistenceError('Replay request could not be durably stored.');
+    }
+    let transactionOpen = false;
     try {
       await client.query('BEGIN');
+      transactionOpen = true;
+      await client.query(
+        `INSERT INTO fortnite_replay.replay_file (file_sha256)
+         VALUES ($1) ON CONFLICT (file_sha256) DO NOTHING`,
+        [fileSha256],
+      );
+      await client.query(
+        `SELECT file_sha256 FROM fortnite_replay.replay_file
+         WHERE file_sha256 = $1 FOR UPDATE`,
+        [fileSha256],
+      );
+      await client.query(
+        `INSERT INTO fortnite_replay.replay_upload
+           (file_sha256, application_id, first_received_at, last_received_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (file_sha256, application_id) DO UPDATE
+         SET last_received_at = CURRENT_TIMESTAMP`,
+        [fileSha256, input.application_id],
+      );
+      const existing = await client.query(
+        `SELECT ${ATTEMPT_SELECT}
+         FROM fortnite_replay.processing_attempt
+         WHERE file_sha256 = $1 AND application_id = $2 AND idempotency_key = $3
+         FOR UPDATE`,
+        [fileSha256, input.application_id, input.idempotency_key],
+      );
+      if (existing.rows[0]) {
+        const row = existing.rows[0];
+        if (row.request_sha256 !== requestSha256) {
+          throw new ReplayConflictError('Idempotency key was already used for a different request.');
+        }
+        await client.query('COMMIT');
+        transactionOpen = false;
+        const attempt = mapAttempt(row);
+        return {
+          attempt,
+          outcome: attempt.status === 'accepted' || attempt.status === 'processing'
+            ? 'processing' : attempt.status === 'failed' ? 'failed' : 'replayed',
+        };
+      }
+
+      const parseMode = typeof input.data.parseMode === 'string'
+        && ['EventsOnly', 'Minimal', 'Normal', 'Full'].includes(input.data.parseMode)
+        ? input.data.parseMode : null;
       const inserted = await client.query(
-        `INSERT INTO fortnite_replay.tb_replay_file
-           (file_sha256, file_name, file_size_bytes, file_created_at)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (file_sha256) DO NOTHING
-         RETURNING ${FILE_COLUMNS}`,
+        `INSERT INTO fortnite_replay.processing_attempt
+           (file_sha256, application_id, idempotency_key, request_sha256, payload_sha256,
+            analyzer_version, application_version, parser_name, parser_version,
+            original_payload, parse_mode, status, received_at, available_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'accepted', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING ${ATTEMPT_SELECT}`,
         [
-          input.fileSha256,
-          input.fileName,
-          input.fileSizeBytes ?? null,
-          input.fileCreatedAt ?? null,
+          fileSha256,
+          input.application_id,
+          input.idempotency_key,
+          requestSha256,
+          payloadSha256,
+          input.analyzer_version.analyzer_version,
+          input.analyzer_version.application_version,
+          input.analyzer_version.parser_name,
+          input.analyzer_version.parser_version,
+          rawPayload,
+          parseMode,
         ],
       );
-
-      const row = inserted.rows[0] ?? (await client.query(
-        `SELECT ${FILE_COLUMNS}
-         FROM fortnite_replay.tb_replay_file
-         WHERE file_sha256 = $1
-         FOR UPDATE`,
-        [input.fileSha256],
-      )).rows[0];
-
-      if (!row) {
-        throw new ReplayConflictError('Replay file registration could not be resolved.');
-      }
-
-      if (!inserted.rows[0] && !sameFileMetadata(row, input)) {
-        throw new ReplayConflictError('A Replay file with this SHA-256 is already registered with different metadata.');
-      }
-
       await client.query('COMMIT');
-      return { file: mapFile(row), created: inserted.rows.length > 0 };
+      transactionOpen = false;
+      return { attempt: mapAttempt(inserted.rows[0]), outcome: 'created' };
     } catch (error) {
-      await rollbackQuietly(client);
-      if (isUniqueViolation(error)) {
-        throw new ReplayConflictError('Replay file registration conflicts with an existing record.');
+      if (transactionOpen) {
+        const rollbackError = await rollback(client);
+        transactionOpen = false;
+        if (rollbackError) {
+          logReplayError('durable_acceptance_rollback', fileSha256, undefined, rollbackError);
+          throw new ReplayPersistenceError('Replay request could not be durably stored.');
+        }
       }
-      throw error;
+      if (error instanceof ReplayConflictError) throw error;
+      logReplayError('durable_acceptance', fileSha256, undefined, error);
+      throw new ReplayPersistenceError('Replay request could not be durably stored.');
     } finally {
       client.release();
     }
-  }
-
-  async listFiles(sha256?: string, matchId?: number): Promise<ReplayFile[]> {
-    const conditions: string[] = [];
-    const values: Array<string | number> = [];
-    if (sha256 !== undefined) {
-      values.push(sha256);
-      conditions.push(`file_sha256 = $${values.length}`);
-    }
-    if (matchId !== undefined) {
-      values.push(matchId);
-      conditions.push(`fk_id_match = $${values.length}`);
-    }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const result = await pool.query(
-      `SELECT ${FILE_COLUMNS}
-       FROM fortnite_replay.tb_replay_file
-       ${where}
-       ORDER BY created_at DESC, id_replay_file DESC`,
-      values,
-    );
-    return result.rows.map(mapFile);
-  }
-
-  async getFile(sha256: string): Promise<ReplayFile> {
-    const result = await pool.query(
-      `SELECT ${FILE_COLUMNS}
-       FROM fortnite_replay.tb_replay_file
-       WHERE file_sha256 = $1`,
-      [sha256],
-    );
-    if (result.rows.length === 0) {
-      throw new ReplayNotFoundError('Replay file was not registered.');
-    }
-    return mapFile(result.rows[0]);
-  }
-
-  async listAttempts(sha256: string): Promise<ReplayProcessingAttempt[]> {
-    const file = await pool.query(
-      `SELECT id_replay_file
-       FROM fortnite_replay.tb_replay_file
-       WHERE file_sha256 = $1`,
-      [sha256],
-    );
-    if (file.rows.length === 0) {
-      throw new ReplayNotFoundError('Replay file was not registered.');
-    }
-    const result = await pool.query(
-      `SELECT ${ATTEMPT_COLUMNS}
-       FROM fortnite_replay.tb_replay_processing_attempt AS a
-       JOIN fortnite_replay.tb_analyzer_version AS v
-         ON v.id_analyzer_version = a.fk_id_analyzer_version
-       WHERE a.fk_id_replay_file = $1
-       ORDER BY a.started_at DESC, a.id_attempt DESC`,
-      [file.rows[0].id_replay_file],
-    );
-    return result.rows.map(mapAttempt);
   }
 
   async ingest(
     fileSha256: string,
     input: ReplayIngestionRequest,
     requestSha256: string,
-  ): Promise<ReplayAttemptOutcome> {
-    let replayFileId: number;
+    inconsistencies = '',
+    payloadSha256?: string,
+    containerMetrics?: ContainerNormalizationMetrics,
+  ): Promise<ReplayAttemptOutcome & { containerPersistence: ContainerPersistenceMetrics | null }> {
+    const client = await pool.connect();
+    let discardClientError: Error | undefined;
+    let attempt: ReplayProcessingAttempt | undefined;
     let attemptId: number | undefined;
-    let isNewAttempt = false;
-    let resumeExistingAttempt = false;
-    let discardClient: Error | undefined;
-    const lockedAttemptIds: number[] = [];
-    const trace = createIngestionTrace(fileSha256, () => attemptId);
-    trace.start('connection');
-    let client: PoolClient;
+    let outcome: ReplayAttemptOutcomeKind = 'created';
+    let transactionOpen = false;
+    let dataTransactionStarted = false;
+    let attemptLockHeld = false;
+    let containerPersistence: ContainerPersistenceMetrics | null = null;
     try {
-      client = await pool.connect();
-    } catch (error) {
-      trace.fail(error);
-      throw error;
-    }
-
-    try {
-      trace.start('attempt_transaction_begin');
       await client.query('BEGIN');
-      trace.start('file_lookup');
-      const fileResult = await client.query(
-        `SELECT id_replay_file
-         FROM fortnite_replay.tb_replay_file
-         WHERE file_sha256 = $1
-         FOR UPDATE`,
+      transactionOpen = true;
+      await client.query(
+        `INSERT INTO fortnite_replay.replay_file (file_sha256)
+         VALUES ($1) ON CONFLICT (file_sha256) DO NOTHING`,
         [fileSha256],
       );
-      if (fileResult.rows.length === 0) {
-        throw new ReplayNotFoundError('Replay file was not registered.');
-      }
-      replayFileId = safeInteger(fileResult.rows[0].id_replay_file, 'replay file id');
-
-      trace.start('attempt_lookup');
-      const existingResult = await client.query(
-        `SELECT ${ATTEMPT_COLUMNS}
-         FROM fortnite_replay.tb_replay_processing_attempt AS a
-         JOIN fortnite_replay.tb_analyzer_version AS v
-           ON v.id_analyzer_version = a.fk_id_analyzer_version
-         WHERE a.fk_id_replay_file = $1
-           AND a.idempotency_key = $2`,
-        [replayFileId, input.idempotencyKey],
+      await client.query(
+        `SELECT file_sha256 FROM fortnite_replay.replay_file
+         WHERE file_sha256 = $1 FOR UPDATE`,
+        [fileSha256],
       );
-      if (existingResult.rows.length > 0) {
-        const existing = existingResult.rows[0];
-        if (existing.request_sha256 !== requestSha256) {
+      await client.query(
+        `INSERT INTO fortnite_replay.replay_upload
+           (file_sha256, application_id, first_received_at, last_received_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (file_sha256, application_id) DO UPDATE
+         SET last_received_at = CURRENT_TIMESTAMP`,
+        [fileSha256, input.application_id],
+      );
+      const existing = await client.query(
+        `SELECT ${ATTEMPT_SELECT}
+         FROM fortnite_replay.processing_attempt
+         WHERE file_sha256 = $1 AND application_id = $2 AND idempotency_key = $3
+         FOR UPDATE`,
+        [fileSha256, input.application_id, input.idempotency_key],
+      );
+      if (existing.rows[0]) {
+        const row = existing.rows[0];
+        if (row.request_sha256 !== requestSha256) {
           throw new ReplayConflictError('Idempotency key was already used for a different request.');
         }
-        attemptId = safeInteger(existing.id_attempt, 'attempt id');
-        if (existing.status === 'processing') {
-          trace.start('attempt_lock');
-          if (!await this.tryAcquireAttemptLock(client, attemptId)) {
-            trace.start('attempt_transaction_commit');
+        attempt = mapAttempt(row);
+        attemptId = attempt.id;
+        if (attempt.status === 'processing') {
+          attemptLockHeld = await this.tryAcquireAttemptLock(client, attemptId);
+          if (!attemptLockHeld) {
+            outcome = 'processing';
             await client.query('COMMIT');
-            trace.finish();
-            client.release();
-            return { attempt: mapAttempt(existing), outcome: 'processing' };
+            transactionOpen = false;
+            return { attempt, outcome, containerPersistence: null };
           }
-          lockedAttemptIds.push(attemptId);
-          const current = await this.loadAttemptRow(client, attemptId, true);
-          if (current.status !== 'processing') {
-            trace.start('attempt_transaction_commit');
-            await client.query('COMMIT');
-            trace.finish();
-            const attempt = mapAttempt(current);
-            const releaseError = await this.releaseAttemptLocks(client, lockedAttemptIds, fileSha256);
-            client.release(releaseError);
-            return { attempt, outcome: attemptOutcomeForStatus(attempt.status, false) };
-          }
-          resumeExistingAttempt = true;
+          outcome = 'replayed';
         } else {
-          trace.start('attempt_transaction_commit');
-          await client.query('COMMIT');
-          trace.finish();
-          const attempt = mapAttempt(existing);
-          client.release();
-          return { attempt, outcome: attemptOutcomeForStatus(attempt.status, false) };
-        }
-      }
-
-      if (!resumeExistingAttempt) {
-        trace.start('active_attempt_recovery');
-        const activeResult = await client.query(
-          `SELECT id_attempt
-           FROM fortnite_replay.tb_replay_processing_attempt
-           WHERE fk_id_replay_file = $1
-             AND status = 'processing'
-           LIMIT 1`,
-          [replayFileId],
-        );
-        if (activeResult.rows.length > 0) {
-          const activeAttemptId = safeInteger(activeResult.rows[0].id_attempt, 'attempt id');
-          if (!await this.tryAcquireAttemptLock(client, activeAttemptId)) {
-            throw new ReplayConflictError('A processing attempt already exists for this Replay file.');
-          }
-          lockedAttemptIds.push(activeAttemptId);
-          const activeAttempt = await this.loadAttemptRow(client, activeAttemptId, true);
-          if (activeAttempt.status === 'processing') {
+          if (attempt.status === 'succeeded') {
             await client.query(
-              `UPDATE fortnite_replay.tb_replay_processing_attempt
-               SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = $2
-               WHERE id_attempt = $1 AND status = 'processing'`,
-              [activeAttemptId, SAFE_FAILURE_MESSAGE],
+              `UPDATE fortnite_replay.processing_attempt SET snapshot_data = $2::jsonb
+               WHERE id = $1 AND snapshot_data IS NULL`,
+              [attemptId, JSON.stringify(input)],
             );
           }
+          outcome = attempt.status === 'failed' ? 'failed' : 'replayed';
+          await client.query('COMMIT');
+          transactionOpen = false;
+          return { attempt, outcome, containerPersistence: null };
         }
-      }
-
-      if (!resumeExistingAttempt) {
-        trace.start('analyzer_version');
-        const version = input.analyzerVersion;
-        await client.query(
-          `INSERT INTO fortnite_replay.tb_analyzer_version
-             (application_version, analyzer_version, parser_name, parser_version, description)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (application_version, analyzer_version, parser_name, parser_version)
-           DO NOTHING`,
+      } else {
+        const insert = await client.query(
+          `INSERT INTO fortnite_replay.processing_attempt
+             (file_sha256, application_id, idempotency_key, request_sha256,
+              payload_sha256, analyzer_version, application_version, parser_name, parser_version,
+              original_payload, parse_mode, status, started_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'processing', CURRENT_TIMESTAMP)
+           RETURNING ${ATTEMPT_SELECT}`,
           [
-            version.applicationVersion,
-            version.analyzerVersion,
-            version.parserName,
-            version.parserVersion,
-            version.description ?? null,
+            fileSha256,
+            input.application_id,
+            input.idempotency_key,
+            requestSha256,
+            payloadSha256 ?? createHash('sha256').update(JSON.stringify(input)).digest('hex'),
+            input.analyzer_version.analyzer_version,
+            input.analyzer_version.application_version,
+            input.analyzer_version.parser_name,
+            input.analyzer_version.parser_version,
+            Buffer.from(JSON.stringify(input)),
+            input.data.parseMode,
           ],
         );
-        const versionResult = await client.query(
-          `SELECT id_analyzer_version
-           FROM fortnite_replay.tb_analyzer_version
-           WHERE application_version = $1
-             AND analyzer_version = $2
-             AND parser_name = $3
-             AND parser_version = $4`,
-          [version.applicationVersion, version.analyzerVersion, version.parserName, version.parserVersion],
-        );
-        const analyzerVersionId = versionResult.rows[0]
-          ? safeInteger(versionResult.rows[0].id_analyzer_version, 'analyzer version id')
-          : undefined;
-        if (analyzerVersionId === undefined) {
-          throw new Error('Analyzer version could not be resolved.');
-        }
-
-        trace.start('attempt_create');
-        const attemptResult = await client.query(
-          `INSERT INTO fortnite_replay.tb_replay_processing_attempt
-             (fk_id_replay_file, fk_id_analyzer_version, idempotency_key, request_sha256)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id_attempt`,
-          [replayFileId, analyzerVersionId, input.idempotencyKey, requestSha256],
-        );
-        attemptId = safeInteger(attemptResult.rows[0].id_attempt, 'attempt id');
-        trace.start('attempt_lock');
-        if (!await this.tryAcquireAttemptLock(client, attemptId)) {
+        attempt = mapAttempt(insert.rows[0]);
+        attemptId = attempt.id;
+        attemptLockHeld = await this.tryAcquireAttemptLock(client, attemptId);
+        if (!attemptLockHeld) {
           throw new ReplayConflictError('Replay processing lock could not be acquired.');
         }
-        lockedAttemptIds.push(attemptId);
-        isNewAttempt = true;
       }
-      trace.start('attempt_transaction_commit');
+
       await client.query('COMMIT');
-      trace.finish();
-    } catch (error) {
-      trace.fail(error);
-      trace.start('attempt_transaction_rollback');
-      discardClient = await rollbackQuietly(client, trace);
-      trace.finish();
-      const releaseError = await this.releaseAttemptLocks(client, lockedAttemptIds, fileSha256);
-      client.release(discardClient ?? releaseError);
-      if (discardClient) throw discardClient;
-      if (isUniqueViolation(error)) {
-        throw new ReplayConflictError('Replay processing conflicts with an existing attempt.');
-      }
-      throw error;
-    }
+      transactionOpen = false;
 
-    if (attemptId === undefined) {
-      const releaseError = await this.releaseAttemptLocks(client, lockedAttemptIds, fileSha256);
-      client.release(releaseError);
-      throw new Error('Replay processing attempt could not be resolved.');
-    }
-
-    try {
-      trace.start('data_transaction_begin');
+      if (attemptId === undefined) throw new Error('Replay attempt could not be resolved.');
       await client.query('BEGIN');
-      trace.start('match');
-      const matchResult = await client.query(
-        `INSERT INTO fortnite_replay.tb_match
-           (match_key, match_start_at, match_end_at, duration_seconds, total_players,
-            total_teams, chapter_number, is_custom_match, session_id, playlist, game_mode,
-            map_code, map_name, season_code, game_version, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, CURRENT_TIMESTAMP)
-         ON CONFLICT (match_key) DO UPDATE SET
-           match_start_at = EXCLUDED.match_start_at,
-           match_end_at = EXCLUDED.match_end_at,
-           duration_seconds = EXCLUDED.duration_seconds,
-           total_players = EXCLUDED.total_players,
-           total_teams = EXCLUDED.total_teams,
-           chapter_number = EXCLUDED.chapter_number,
-           is_custom_match = EXCLUDED.is_custom_match,
-           session_id = EXCLUDED.session_id,
-           playlist = EXCLUDED.playlist,
-           game_mode = EXCLUDED.game_mode,
-           map_code = EXCLUDED.map_code,
-           map_name = EXCLUDED.map_name,
-           season_code = EXCLUDED.season_code,
-           game_version = EXCLUDED.game_version,
-           updated_at = CURRENT_TIMESTAMP
-         RETURNING id_match`,
-        [
-          input.match.matchKey,
-          input.match.matchStartAt ?? null,
-          input.match.matchEndAt ?? null,
-          input.match.durationSeconds ?? null,
-          input.match.totalPlayers ?? null,
-          input.match.totalTeams ?? null,
-          input.match.chapterNumber ?? null,
-          input.match.isCustomMatch ?? null,
-          input.match.sessionId ?? null,
-          input.match.playlist ?? null,
-          input.match.gameMode ?? null,
-          input.match.mapCode ?? null,
-          input.match.mapName ?? null,
-          input.match.seasonCode ?? null,
-          input.match.gameVersion ?? null,
-        ],
+      transactionOpen = true;
+      dataTransactionStarted = true;
+      await client.query(
+        'UPDATE fortnite_replay.processing_attempt SET snapshot_data = $2::jsonb WHERE id = $1',
+        [attemptId, JSON.stringify(input)],
       );
-      const matchId = safeInteger(matchResult.rows[0].id_match, 'match id');
-
-      trace.start('derived_data_cleanup');
-      await this.deleteFileDerivedData(client, replayFileId);
-      trace.start('stale_participant_cleanup');
-      const currentSourceKeys = input.matchPlayers.map((player) => player.sourcePlayerKey);
-      const staleSources = await client.query(
-        `SELECT fk_id_match_player
-         FROM fortnite_replay.tb_match_player_source
-         WHERE fk_id_replay_file = $1
-           AND NOT (source_player_key = ANY($2::text[]))`,
-        [replayFileId, currentSourceKeys],
+      const identityKey = input.data.match?.gameData?.gameSessionId
+        ? `session:${input.data.match.gameData.gameSessionId}`
+        : `file:${fileSha256}`;
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`replay-match:${identityKey}`],
+      );
+      const matchId = await this.upsertMatch(client, identityKey, input.data, attemptId);
+      await client.query(
+        `INSERT INTO fortnite_replay.match_processing_attempt (match_id, processing_attempt_id)
+         VALUES ($1, $2) ON CONFLICT (processing_attempt_id) DO NOTHING`,
+        [matchId, attemptId],
+      );
+      await this.recordSections(client, attemptId, input.data);
+      const playerIds = await this.persistPlayers(client, matchId, attemptId, input.data.players);
+      await this.persistStats(client, matchId, attemptId, input.data.match);
+      await this.persistTeams(client, matchId, input.data.teams, playerIds);
+      await this.persistEliminations(client, matchId, attemptId, input.data.eventEliminations);
+      await this.persistKillFeed(client, matchId, attemptId, input.data.killFeed);
+      await this.persistMap(client, matchId, attemptId, input.data.map);
+      await this.persistWeapons(client, matchId, attemptId, input.data.weapons);
+      containerPersistence = await this.persistObservations(
+        client,
+        matchId,
+        attemptId,
+        input.data.observations,
+        containerMetrics,
       );
       await client.query(
-        `DELETE FROM fortnite_replay.tb_match_player_source
-         WHERE fk_id_replay_file = $1
-           AND NOT (source_player_key = ANY($2::text[]))`,
-        [replayFileId, currentSourceKeys],
+        `UPDATE fortnite_replay.processing_attempt
+         SET status = 'succeeded', completed_at = CURRENT_TIMESTAMP,
+             error_code = CASE WHEN $2 = '' THEN NULL ELSE 'data_inconsistencies' END,
+             error_message = CASE WHEN $2 = '' THEN NULL
+               ELSE 'Some payload fields were invalid or unknown and were not normalized.' END,
+             error_detail = NULLIF($2, ''), lease_expires_at = NULL
+         WHERE id = $1 AND status = 'processing'`,
+        [attemptId, inconsistencies],
       );
-      const staleParticipantIds = [...new Set(
-        staleSources.rows.map((row) => safeInteger(row.fk_id_match_player, 'match player id')),
-      )];
-      await client.query(
-        `DELETE FROM fortnite_replay.tb_match_player AS participant
-         WHERE participant.id_match_player = ANY($2::bigint[])
-           AND participant.fk_id_match = $1
-           AND participant.fk_id_player IS NULL
-           AND NOT EXISTS (
-             SELECT 1
-             FROM fortnite_replay.tb_match_player_source AS source
-             WHERE source.fk_id_match_player = participant.id_match_player
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_match_stats AS stats
-             WHERE stats.fk_id_match = participant.fk_id_match
-               AND stats.fk_id_match_player = participant.id_match_player
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_elimination AS elimination
-             WHERE elimination.fk_id_match = participant.fk_id_match
-               AND (elimination.fk_id_eliminated_player = participant.id_match_player
-                 OR elimination.fk_id_eliminator_player = participant.id_match_player)
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_player_poi_visit AS visit
-             WHERE visit.fk_id_match = participant.fk_id_match
-               AND visit.fk_id_match_player = participant.id_match_player
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_container_interaction AS interaction
-             WHERE interaction.fk_id_match = participant.fk_id_match
-               AND interaction.fk_id_match_player = participant.id_match_player
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_reward AS reward
-             WHERE reward.fk_id_match = participant.fk_id_match
-               AND reward.fk_id_match_player = participant.id_match_player
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_player_vehicle_usage AS usage
-             WHERE usage.fk_id_match = participant.fk_id_match
-               AND usage.fk_id_match_player = participant.id_match_player
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM fortnite_replay.tb_player_vehicle AS usage
-             WHERE usage.fk_id_match = participant.fk_id_match
-               AND usage.fk_id_match_player = participant.id_match_player
-           )`,
-        [matchId, staleParticipantIds],
-      );
-
-      trace.start('global_players');
-      await this.upsertGlobalPlayers(client, input.matchPlayers);
-      trace.start('match_players');
-      await this.upsertMatchPlayers(client, replayFileId, matchId, input.matchPlayers);
-      trace.start('match_stats');
-      await this.insertMatchStats(client, replayFileId, matchId, input);
-      trace.start('containers');
-      await this.insertContainers(client, replayFileId, matchId, input, () => trace.start('container_interactions'));
-      trace.start('rewards');
-      await this.insertRewards(client, replayFileId, matchId, input);
-      trace.start('vehicle_usages');
-      await this.insertVehicleUsages(client, replayFileId, matchId, input);
-      trace.start('pois_and_visits');
-      await this.insertPoisAndVisits(client, replayFileId, matchId, input);
-      trace.start('safe_zones');
-      await this.insertSafeZones(client, replayFileId, matchId, input);
-
-      trace.start('attempt_finalize');
-      await client.query(
-        `UPDATE fortnite_replay.tb_replay_processing_attempt
-         SET status = 'success', completed_at = CURRENT_TIMESTAMP, error_message = NULL
-         WHERE id_attempt = $1 AND status = 'processing'`,
-        [attemptId],
-      );
-      await client.query(
-        `UPDATE fortnite_replay.tb_replay_file
-         SET fk_id_match = $2, fk_id_successful_attempt = $3
-         WHERE id_replay_file = $1`,
-        [replayFileId, matchId, attemptId],
-      );
-      const attempt = await this.loadAttempt(client, attemptId);
-      trace.start('data_transaction_commit');
+      attempt = await this.loadAttempt(client, attemptId);
       await client.query('COMMIT');
-      trace.finish();
-      return { attempt, outcome: isNewAttempt ? 'created' : 'replayed' };
+      transactionOpen = false;
+      return { attempt, outcome, containerPersistence };
     } catch (error) {
-      trace.fail(error);
-      trace.start('data_transaction_rollback');
-      discardClient = await rollbackQuietly(client, trace);
-      trace.finish();
-      if (discardClient) throw discardClient;
-      let failedUpdate;
-      let attempt: ReplayProcessingAttempt;
-      try {
-        trace.start('attempt_mark_failed');
-        failedUpdate = await client.query(
-          `UPDATE fortnite_replay.tb_replay_processing_attempt
-           SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = $2
-           WHERE id_attempt = $1 AND status = 'processing'`,
+      if (transactionOpen) {
+        discardClientError = await rollback(client);
+        transactionOpen = false;
+      }
+      if (discardClientError) throw discardClientError;
+      if (error instanceof ReplayConflictError) throw error;
+      if (dataTransactionStarted && attemptId !== undefined) {
+        logReplayError('snapshot_persistence', fileSha256, attemptId, error);
+        await client.query(
+          `UPDATE fortnite_replay.processing_attempt
+           SET status = 'failed', completed_at = CURRENT_TIMESTAMP,
+                 error_code = 'persistence_failed', error_message = $2,
+                 lease_expires_at = NULL
+           WHERE id = $1 AND status = 'processing'`,
           [attemptId, SAFE_FAILURE_MESSAGE],
         );
         attempt = await this.loadAttempt(client, attemptId);
-        trace.finish();
-      } catch (secondaryError) {
-        trace.fail(secondaryError);
-        throw secondaryError;
-      }
-      if (failedUpdate.rowCount === 0 && attempt.status === 'success') {
-        return { attempt, outcome: isNewAttempt ? 'created' : 'replayed' };
+        return { attempt, outcome: 'failed', containerPersistence };
       }
       if (isUniqueViolation(error)) {
-        throw new ReplayConflictError('Replay ingestion conflicts with existing data.');
+        throw new ReplayConflictError('Replay ingestion conflicts with an existing attempt.');
       }
-      return { attempt, outcome: 'failed' };
+      throw error;
     } finally {
-      const releaseError = await this.releaseAttemptLocks(client, lockedAttemptIds, fileSha256);
-      client.release(discardClient ?? releaseError);
+      if (attemptLockHeld && attemptId !== undefined) {
+        try {
+          const unlocked = await client.query(
+            'SELECT pg_advisory_unlock(hashtextextended($1, 0)) AS released',
+            [`replay-processing-attempt:${attemptId}`],
+          );
+          if (unlocked.rows[0]?.released !== true) {
+            discardClientError = new Error('Replay attempt lock could not be released.');
+            logReplayError('attempt_lock_release', fileSha256, attemptId, discardClientError);
+          }
+        } catch (error) {
+          discardClientError = error instanceof Error ? error : new Error('Replay attempt lock release failed.');
+          logReplayError('attempt_lock_release', fileSha256, attemptId, error);
+        }
+      }
+      client.release(discardClientError);
+      if (discardClientError) throw discardClientError;
     }
   }
 
-  private async deleteFileDerivedData(client: PoolClient, replayFileId: number): Promise<void> {
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_reward
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_container_interaction
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_container
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_player_vehicle_usage
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_player_poi_visit
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_safe_zone_phase
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-    await client.query(
-      `DELETE FROM fortnite_replay.tb_match_stats
-       WHERE fk_id_replay_file = $1`,
-      [replayFileId],
-    );
-  }
-
-  private async upsertGlobalPlayers(client: PoolClient, players: ReplayIngestionRequest['matchPlayers']): Promise<void> {
-    const input = JSON.stringify(players.map((player) => ({
-      epic_id: player.epicId ?? null,
-      bot_id: player.botId ?? null,
-      platform_unique_net_id: player.platformUniqueNetId ?? null,
-      current_display_name: player.currentDisplayName ?? null,
-      platform: player.platform ?? null,
-    })));
-    await client.query(
-      `WITH source AS (
-         SELECT epic_id, bot_id, platform_unique_net_id, current_display_name, platform
-         FROM jsonb_to_recordset($1::jsonb) AS x(
-           epic_id text, bot_id text, platform_unique_net_id text,
-           current_display_name text, platform text
+  async claimNext(leaseSeconds: number): Promise<ClaimedReplayAttempt | null> {
+    const client = await pool.connect();
+    let transactionOpen = false;
+    try {
+      await client.query('BEGIN');
+      transactionOpen = true;
+      const expired = await client.query(
+        `SELECT id
+         FROM fortnite_replay.processing_attempt
+         WHERE status = 'processing'
+           AND (lease_expires_at IS NULL OR lease_expires_at <= CURRENT_TIMESTAMP)
+         ORDER BY lease_expires_at NULLS FIRST, received_at
+         FOR UPDATE SKIP LOCKED
+         LIMIT 10`,
+      );
+      for (const row of expired.rows) {
+        const id = safeInteger(row.id, 'attempt id');
+        const lockKey = `replay-processing-attempt:${id}`;
+        const lock = await client.query(
+          'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
+          [lockKey],
+        );
+        if (lock.rows[0]?.acquired !== true) continue;
+        await client.query(
+          `UPDATE fortnite_replay.processing_attempt
+           SET status = 'accepted', started_at = NULL, lease_expires_at = NULL,
+               available_at = CURRENT_TIMESTAMP
+           WHERE id = $1 AND status = 'processing'`,
+          [id],
+        );
+        const unlocked = await client.query(
+          'SELECT pg_advisory_unlock(hashtextextended($1, 0)) AS released',
+          [lockKey],
+        );
+        if (unlocked.rows[0]?.released !== true) {
+          throw new Error('Expired replay attempt lock could not be released.');
+        }
+      }
+      const result = await client.query(
+        `WITH candidate AS (
+           SELECT id
+           FROM fortnite_replay.processing_attempt
+           WHERE status = 'accepted' AND available_at <= CURRENT_TIMESTAMP
+           ORDER BY available_at, received_at
+           FOR UPDATE SKIP LOCKED
+           LIMIT 1
          )
-       )
-       INSERT INTO fortnite_replay.tb_player
-         (epic_id, bot_id, is_bot, platform_unique_net_id, current_display_name, platform)
-       SELECT epic_id, NULL, FALSE, platform_unique_net_id, current_display_name, platform
-       FROM source
-       WHERE epic_id IS NOT NULL
-       ON CONFLICT (epic_id) DO UPDATE SET
-         last_seen_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP,
-         platform_unique_net_id = COALESCE(EXCLUDED.platform_unique_net_id, fortnite_replay.tb_player.platform_unique_net_id),
-         current_display_name = COALESCE(EXCLUDED.current_display_name, fortnite_replay.tb_player.current_display_name),
-         platform = COALESCE(EXCLUDED.platform, fortnite_replay.tb_player.platform)`,
-      [input],
-    );
-    await client.query(
-      `WITH source AS (
-         SELECT epic_id, bot_id, platform_unique_net_id, current_display_name, platform
-         FROM jsonb_to_recordset($1::jsonb) AS x(
-           epic_id text, bot_id text, platform_unique_net_id text,
-           current_display_name text, platform text
-         )
-       )
-       INSERT INTO fortnite_replay.tb_player
-         (epic_id, bot_id, is_bot, platform_unique_net_id, current_display_name, platform)
-       SELECT NULL, bot_id, TRUE, platform_unique_net_id, current_display_name, platform
-       FROM source
-       WHERE bot_id IS NOT NULL
-       ON CONFLICT (bot_id) DO UPDATE SET
-         last_seen_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP,
-         platform_unique_net_id = COALESCE(EXCLUDED.platform_unique_net_id, fortnite_replay.tb_player.platform_unique_net_id),
-         current_display_name = COALESCE(EXCLUDED.current_display_name, fortnite_replay.tb_player.current_display_name),
-         platform = COALESCE(EXCLUDED.platform, fortnite_replay.tb_player.platform)`,
-      [input],
-    );
-  }
-
-  private async upsertMatchPlayers(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    players: ReplayIngestionRequest['matchPlayers'],
-  ): Promise<void> {
-    const input = JSON.stringify(players.map((player) => ({
-      source_player_key: player.sourcePlayerKey,
-      epic_id: player.epicId ?? null,
-      bot_id: player.botId ?? null,
-      total_traveled: player.totalTraveled ?? null,
-      death_time_seconds: player.deathTimeSeconds ?? null,
-      team_index: player.teamIndex ?? null,
-      player_number: player.playerNumber ?? null,
-      placement: player.placement ?? null,
-      kills: player.kills ?? null,
-      team_kills: player.teamKills ?? null,
-      assists: player.assists ?? null,
-      weapon_damage: player.weaponDamage ?? null,
-      other_damage: player.otherDamage ?? null,
-      revives: player.revives ?? null,
-      damage_taken: player.damageTaken ?? null,
-      damage_to_structures: player.damageToStructures ?? null,
-      materials_gathered: player.materialsGathered ?? null,
-      materials_used: player.materialsUsed ?? null,
-      death_cause: player.deathCause ?? null,
-      death_circumstance: player.deathCircumstance ?? null,
-      level: player.level ?? null,
-      season_level: player.seasonLevel ?? null,
-      is_replay_owner: player.isReplayOwner ?? null,
-      is_game_session_owner: player.isGameSessionOwner ?? null,
-      is_party_leader: player.isPartyLeader ?? null,
-      is_anonymous: player.isAnonymous ?? null,
-      has_finished_loading: player.hasFinishedLoading ?? null,
-      has_started_playing: player.hasStartedPlaying ?? null,
-      replay_player_id: player.replayPlayerId ?? null,
-      player_type: player.playerType,
-      platform: player.platform ?? null,
-      current_display_name: player.currentDisplayName ?? null,
-      platform_unique_net_id: player.platformUniqueNetId ?? null,
-      cosmetics: player.cosmetics ?? {},
-    })));
-
-    const participantResult = await client.query(
-      `WITH source AS MATERIALIZED (
-         SELECT source_player_key, epic_id, bot_id, total_traveled,
-                death_time_seconds, team_index, player_number, placement, kills,
-                team_kills, assists, weapon_damage, other_damage, revives,
-                damage_taken, damage_to_structures, materials_gathered,
-                materials_used, death_cause, death_circumstance, level,
-                season_level, is_replay_owner, is_game_session_owner,
-                is_party_leader, is_anonymous, has_finished_loading,
-                has_started_playing, replay_player_id, player_type, platform,
-                current_display_name, platform_unique_net_id, cosmetics
-         FROM jsonb_to_recordset($3::jsonb) AS x(
-           source_player_key text, epic_id text, bot_id text,
-           total_traveled double precision, death_time_seconds double precision,
-           team_index integer, player_number integer, placement integer, kills integer,
-           team_kills integer, assists integer, weapon_damage integer, other_damage integer,
-           revives integer, damage_taken integer, damage_to_structures integer,
-           materials_gathered integer, materials_used integer, death_cause integer,
-           death_circumstance integer, level integer, season_level integer,
-           is_replay_owner boolean, is_game_session_owner boolean, is_party_leader boolean,
-           is_anonymous boolean, has_finished_loading boolean, has_started_playing boolean,
-           replay_player_id text, player_type text, platform text,
-           current_display_name text, platform_unique_net_id text, cosmetics jsonb
-         )
-       ),
-       resolved AS MATERIALIZED (
-         SELECT s.source_player_key, s.epic_id, s.bot_id, s.total_traveled,
-                s.death_time_seconds, s.team_index, s.player_number, s.placement,
-                s.kills, s.team_kills, s.assists, s.weapon_damage, s.other_damage,
-                s.revives, s.damage_taken, s.damage_to_structures,
-                s.materials_gathered, s.materials_used, s.death_cause,
-                s.death_circumstance, s.level, s.season_level, s.is_replay_owner,
-                s.is_game_session_owner, s.is_party_leader, s.is_anonymous,
-                s.has_finished_loading, s.has_started_playing, s.replay_player_id,
-                s.player_type, s.platform, s.current_display_name,
-                s.platform_unique_net_id, s.cosmetics,
-                p.id_player AS global_player_id,
-                src.fk_id_match_player AS sourced_match_player_id
-         FROM source AS s
-         LEFT JOIN fortnite_replay.tb_player AS p
-           ON (s.epic_id IS NOT NULL AND p.epic_id = s.epic_id)
-           OR (s.bot_id IS NOT NULL AND p.bot_id = s.bot_id)
-         LEFT JOIN fortnite_replay.tb_match_player_source AS src
-           ON src.fk_id_replay_file = $1
-          AND src.source_player_key = s.source_player_key
-       ),
-       planned AS MATERIALIZED (
-         SELECT r.*,
-                CASE
-                  WHEN r.global_player_id IS NULL AND r.sourced_match_player_id IS NULL
-                  THEN nextval('fortnite_replay.tb_match_player_id_match_player_seq')
-                  ELSE NULL
-                END AS new_match_player_id
-         FROM resolved AS r
-       ),
-       known_write AS (
-         INSERT INTO fortnite_replay.tb_match_player
-           (fk_id_match, fk_id_player, total_traveled, death_time_seconds, team_index,
-            player_number, placement, kills, team_kills, assists, weapon_damage,
-            other_damage, revives, damage_taken, damage_to_structures, materials_gathered,
-            materials_used, death_cause, death_circumstance, level, season_level,
-            is_replay_owner, is_game_session_owner, is_party_leader, is_anonymous,
-            has_finished_loading, has_started_playing, replay_player_id, player_type,
-            platform, current_display_name, platform_unique_net_id, cosmetics)
-         SELECT $2, global_player_id, total_traveled, death_time_seconds, team_index,
-                player_number, placement, kills, team_kills, assists, weapon_damage,
-                other_damage, revives, damage_taken, damage_to_structures, materials_gathered,
-                materials_used, death_cause, death_circumstance, level, season_level,
-                is_replay_owner, is_game_session_owner, is_party_leader, is_anonymous,
-                has_finished_loading, has_started_playing, replay_player_id, player_type,
-                platform, current_display_name, platform_unique_net_id,
-                COALESCE(cosmetics, '{}'::jsonb)
-         FROM planned
-         WHERE global_player_id IS NOT NULL
-         ON CONFLICT (fk_id_match, fk_id_player) DO UPDATE SET
-           total_traveled = EXCLUDED.total_traveled,
-           death_time_seconds = EXCLUDED.death_time_seconds,
-           team_index = EXCLUDED.team_index,
-           player_number = EXCLUDED.player_number,
-           placement = EXCLUDED.placement,
-           kills = EXCLUDED.kills,
-           team_kills = EXCLUDED.team_kills,
-           assists = EXCLUDED.assists,
-           weapon_damage = EXCLUDED.weapon_damage,
-           other_damage = EXCLUDED.other_damage,
-           revives = EXCLUDED.revives,
-           damage_taken = EXCLUDED.damage_taken,
-           damage_to_structures = EXCLUDED.damage_to_structures,
-           materials_gathered = EXCLUDED.materials_gathered,
-           materials_used = EXCLUDED.materials_used,
-           death_cause = EXCLUDED.death_cause,
-           death_circumstance = EXCLUDED.death_circumstance,
-           level = EXCLUDED.level,
-           season_level = EXCLUDED.season_level,
-           is_replay_owner = EXCLUDED.is_replay_owner,
-           is_game_session_owner = EXCLUDED.is_game_session_owner,
-           is_party_leader = EXCLUDED.is_party_leader,
-           is_anonymous = EXCLUDED.is_anonymous,
-           has_finished_loading = EXCLUDED.has_finished_loading,
-           has_started_playing = EXCLUDED.has_started_playing,
-           replay_player_id = EXCLUDED.replay_player_id,
-           player_type = EXCLUDED.player_type,
-           platform = EXCLUDED.platform,
-           current_display_name = EXCLUDED.current_display_name,
-           platform_unique_net_id = EXCLUDED.platform_unique_net_id,
-           cosmetics = EXCLUDED.cosmetics
-         RETURNING id_match_player, fk_id_player
-       ),
-       unknown_update AS (
-         UPDATE fortnite_replay.tb_match_player AS p
-         SET total_traveled = s.total_traveled,
-             death_time_seconds = s.death_time_seconds,
-             team_index = s.team_index,
-             player_number = s.player_number,
-             placement = s.placement,
-             kills = s.kills,
-             team_kills = s.team_kills,
-             assists = s.assists,
-             weapon_damage = s.weapon_damage,
-             other_damage = s.other_damage,
-             revives = s.revives,
-             damage_taken = s.damage_taken,
-             damage_to_structures = s.damage_to_structures,
-             materials_gathered = s.materials_gathered,
-             materials_used = s.materials_used,
-             death_cause = s.death_cause,
-             death_circumstance = s.death_circumstance,
-             level = s.level,
-             season_level = s.season_level,
-             is_replay_owner = s.is_replay_owner,
-             is_game_session_owner = s.is_game_session_owner,
-             is_party_leader = s.is_party_leader,
-             is_anonymous = s.is_anonymous,
-             has_finished_loading = s.has_finished_loading,
-             has_started_playing = s.has_started_playing,
-             replay_player_id = s.replay_player_id,
-             player_type = s.player_type,
-             platform = s.platform,
-             current_display_name = s.current_display_name,
-             platform_unique_net_id = s.platform_unique_net_id,
-             cosmetics = COALESCE(s.cosmetics, '{}'::jsonb)
-         FROM planned AS s
-         WHERE s.global_player_id IS NULL
-           AND s.sourced_match_player_id = p.id_match_player
-           AND p.fk_id_match = $2
-         RETURNING p.id_match_player
-       ),
-       unknown_insert AS (
-         INSERT INTO fortnite_replay.tb_match_player
-           (id_match_player, fk_id_match, fk_id_player, total_traveled, death_time_seconds,
-            team_index, player_number, placement, kills, team_kills, assists, weapon_damage,
-            other_damage, revives, damage_taken, damage_to_structures, materials_gathered,
-            materials_used, death_cause, death_circumstance, level, season_level,
-            is_replay_owner, is_game_session_owner, is_party_leader, is_anonymous,
-            has_finished_loading, has_started_playing, replay_player_id, player_type,
-            platform, current_display_name, platform_unique_net_id, cosmetics)
-         OVERRIDING SYSTEM VALUE
-         SELECT new_match_player_id, $2, NULL, total_traveled, death_time_seconds,
-                team_index, player_number, placement, kills, team_kills, assists, weapon_damage,
-                other_damage, revives, damage_taken, damage_to_structures, materials_gathered,
-                materials_used, death_cause, death_circumstance, level, season_level,
-                is_replay_owner, is_game_session_owner, is_party_leader, is_anonymous,
-                has_finished_loading, has_started_playing, replay_player_id, player_type,
-                platform, current_display_name, platform_unique_net_id,
-                COALESCE(cosmetics, '{}'::jsonb)
-         FROM planned
-         WHERE new_match_player_id IS NOT NULL
-         RETURNING id_match_player
-       ),
-       links AS (
-         SELECT p.source_player_key,
-                COALESCE(k.id_match_player, u.id_match_player, i.id_match_player,
-                         p.sourced_match_player_id, p.new_match_player_id) AS match_player_id
-         FROM planned AS p
-         LEFT JOIN known_write AS k ON k.fk_id_player = p.global_player_id
-         LEFT JOIN unknown_update AS u ON u.id_match_player = p.sourced_match_player_id
-         LEFT JOIN unknown_insert AS i ON i.id_match_player = p.new_match_player_id
-       )
-       INSERT INTO fortnite_replay.tb_match_player_source
-         (fk_id_replay_file, fk_id_match, source_player_key, fk_id_match_player)
-       SELECT $1, $2, source_player_key, match_player_id
-       FROM links
-       WHERE match_player_id IS NOT NULL
-       ON CONFLICT (fk_id_replay_file, source_player_key) DO UPDATE SET
-         fk_id_match = EXCLUDED.fk_id_match,
-         fk_id_match_player = EXCLUDED.fk_id_match_player`,
-      [replayFileId, matchId, input],
-    );
-    assertInsertedRows(participantResult.rowCount, players.length, 'match participant source');
-  }
-
-  private async insertMatchStats(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    request: ReplayIngestionRequest,
-  ): Promise<void> {
-    if (!request.matchStats) return;
-    const stats = request.matchStats;
-    const result = await client.query(
-      `INSERT INTO fortnite_replay.tb_match_stats
-         (fk_id_match, fk_id_match_player, total_traveled, accuracy, unknown, assists,
-          eliminations, weapon_damage, other_damage, revives, damage_taken,
-          damage_to_structures, materials_gathered, materials_used, fk_id_replay_file)
-       VALUES (
-         $1,
-         (SELECT fk_id_match_player
-          FROM fortnite_replay.tb_match_player_source
-          WHERE fk_id_replay_file = $2 AND source_player_key = $3),
-         $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $2
-       )
-       ON CONFLICT (fk_id_match) DO UPDATE SET
-         fk_id_match_player = EXCLUDED.fk_id_match_player,
-         total_traveled = EXCLUDED.total_traveled,
-         accuracy = EXCLUDED.accuracy,
-         unknown = EXCLUDED.unknown,
-         assists = EXCLUDED.assists,
-         eliminations = EXCLUDED.eliminations,
-         weapon_damage = EXCLUDED.weapon_damage,
-         other_damage = EXCLUDED.other_damage,
-         revives = EXCLUDED.revives,
-         damage_taken = EXCLUDED.damage_taken,
-         damage_to_structures = EXCLUDED.damage_to_structures,
-         materials_gathered = EXCLUDED.materials_gathered,
-         materials_used = EXCLUDED.materials_used,
-         fk_id_replay_file = EXCLUDED.fk_id_replay_file`,
-      [
-        matchId,
-        replayFileId,
-        stats.sourcePlayerKey ?? null,
-        stats.totalTraveled ?? null,
-        stats.accuracy ?? null,
-        stats.unknown ?? null,
-        stats.assists ?? null,
-        stats.eliminations ?? null,
-        stats.weaponDamage ?? null,
-        stats.otherDamage ?? null,
-        stats.revives ?? null,
-        stats.damageTaken ?? null,
-        stats.damageToStructures ?? null,
-        stats.materialsGathered ?? null,
-        stats.materialsUsed ?? null,
-      ],
-    );
-    assertInsertedRows(result.rowCount, 1, 'match stats');
-  }
-
-  private async insertContainers(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    request: ReplayIngestionRequest,
-    startInteractions: () => void,
-  ): Promise<void> {
-    const containers = request.containers ?? [];
-    const containerRows = containers.map((container) => ({
-      source_id: container.sourceId,
-      container_kind: container.containerKind,
-      blueprint: container.blueprint ?? null,
-      replay_actor_id: container.replayActorId ?? null,
-      location_x: container.locationX ?? null,
-      location_y: container.locationY ?? null,
-      location_z: container.locationZ ?? null,
-      first_seen_seconds: container.firstSeenSeconds ?? null,
-    }));
-    const containerResult = await client.query(
-      `WITH source AS (
-         SELECT source_id, container_kind, blueprint, replay_actor_id,
-                location_x, location_y, location_z, first_seen_seconds
-         FROM jsonb_to_recordset($3::jsonb) AS x(
-           source_id text, container_kind text, blueprint text, replay_actor_id text,
-           location_x double precision, location_y double precision, location_z double precision,
-           first_seen_seconds double precision
-         )
-       )
-       INSERT INTO fortnite_replay.tb_container
-         (fk_id_match, fk_id_replay_file, source_key, container_kind, blueprint,
-          replay_actor_id, location_x, location_y, location_z, first_seen_seconds)
-       SELECT $2, $1, source_id, container_kind, blueprint, replay_actor_id,
-              location_x, location_y, location_z, first_seen_seconds
-       FROM source`,
-      [replayFileId, matchId, JSON.stringify(containerRows)],
-    );
-    assertInsertedRows(containerResult.rowCount, containers.length, 'container');
-
-    startInteractions();
-    const interactions = containers.flatMap((container) => (container.interactions ?? []).map((interaction) => ({
-      source_id: interaction.sourceId,
-      container_source_id: container.sourceId,
-      source_player_key: interaction.sourcePlayerKey ?? null,
-      event_time_seconds: interaction.eventTimeSeconds,
-      is_refill_reopen: interaction.isRefillReopen ?? false,
-      interaction_type: interaction.interactionType,
-      source_confidence: interaction.sourceConfidence ?? null,
-    })));
-    const interactionResult = await client.query(
-      `WITH source AS (
-         SELECT source_id, container_source_id, source_player_key,
-                event_time_seconds, is_refill_reopen, interaction_type,
-                source_confidence
-         FROM jsonb_to_recordset($3::jsonb) AS x(
-           source_id text, container_source_id text, source_player_key text,
-           event_time_seconds double precision, is_refill_reopen boolean,
-           interaction_type text, source_confidence text
-         )
-       )
-       INSERT INTO fortnite_replay.tb_container_interaction
-         (fk_id_match, fk_id_replay_file, source_key, fk_id_container,
-          fk_id_match_player, event_time_seconds, is_refill_reopen,
-          interaction_type, source_confidence)
-       SELECT $2, $1, source.source_id, container.id_container,
-              player.fk_id_match_player, source.event_time_seconds,
-              COALESCE(source.is_refill_reopen, FALSE), source.interaction_type,
-              source.source_confidence
-       FROM source
-       JOIN fortnite_replay.tb_container AS container
-         ON container.fk_id_replay_file = $1
-        AND container.source_key = source.container_source_id
-       LEFT JOIN fortnite_replay.tb_match_player_source AS player
-         ON player.fk_id_replay_file = $1
-        AND player.source_player_key = source.source_player_key`,
-      [replayFileId, matchId, JSON.stringify(interactions)],
-    );
-    assertInsertedRows(interactionResult.rowCount, interactions.length, 'container interaction');
-  }
-
-  private async insertRewards(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    request: ReplayIngestionRequest,
-  ): Promise<void> {
-    const rewards = request.rewards ?? [];
-    const catalogRows = rewards.map((reward) => ({
-      reward_code: reward.rewardTypeCode ?? reward.prizeId,
-      category: reward.category ?? null,
-      display_name: reward.displayName ?? null,
-    }));
-    const rewardResult = await client.query(
-      `WITH source AS (
-         SELECT DISTINCT ON (reward_code) reward_code, category, display_name
-         FROM jsonb_to_recordset($1::jsonb) AS x(
-           reward_code text, category text, display_name text
-         )
-         ORDER BY reward_code
-       )
-       INSERT INTO fortnite_replay.tb_reward_type AS existing
-         (reward_code, category, display_name)
-       SELECT reward_code, category, display_name
-       FROM source
-       ON CONFLICT (reward_code) DO UPDATE SET
-         category = COALESCE(EXCLUDED.category, existing.category),
-         display_name = COALESCE(EXCLUDED.display_name, existing.display_name)`,
-      [JSON.stringify(catalogRows)],
-    );
-    const rows = rewards.map((reward) => ({
-      source_id: reward.sourceId,
-      prize_id: reward.prizeId,
-      reward_code: reward.rewardTypeCode ?? reward.prizeId,
-      source_player_key: reward.sourcePlayerKey ?? null,
-      interaction_source_id: reward.containerInteractionSourceId ?? null,
-      event_time_seconds: reward.eventTimeSeconds ?? null,
-      is_golden_chest: reward.isGoldenChest ?? null,
-      is_teammate_reward: reward.isTeammateReward,
-      is_from_chest: reward.isFromChest ?? null,
-      was_destroyed: reward.wasDestroyed ?? null,
-      origin: reward.origin ?? null,
-      source_confidence: reward.sourceConfidence ?? null,
-    }));
-    await client.query(
-      `WITH source AS (
-         SELECT source_id, prize_id, reward_code, source_player_key,
-                interaction_source_id, event_time_seconds, is_golden_chest,
-                is_teammate_reward, is_from_chest, was_destroyed, origin,
-                source_confidence
-         FROM jsonb_to_recordset($3::jsonb) AS x(
-           source_id text, prize_id text, reward_code text, source_player_key text,
-           interaction_source_id text, event_time_seconds double precision,
-           is_golden_chest boolean, is_teammate_reward boolean, is_from_chest boolean,
-           was_destroyed boolean, origin text, source_confidence text
-         )
-       )
-       INSERT INTO fortnite_replay.tb_reward
-         (fk_id_match, fk_id_replay_file, source_key, prize_id, fk_id_match_player,
-          fk_id_reward_type, fk_id_container_interaction, event_time_seconds,
-          is_golden_chest, is_teammate_reward, is_from_chest, was_destroyed,
-          origin, source_confidence)
-       SELECT $2, $1, source.source_id, source.prize_id, player.fk_id_match_player,
-              reward_type.id_reward_type, interaction.id_container_interaction,
-              source.event_time_seconds, source.is_golden_chest,
-              COALESCE(source.is_teammate_reward, FALSE), source.is_from_chest,
-              source.was_destroyed, source.origin, source.source_confidence
-       FROM source
-       JOIN fortnite_replay.tb_reward_type AS reward_type
-         ON reward_type.reward_code = source.reward_code
-       LEFT JOIN fortnite_replay.tb_match_player_source AS player
-         ON player.fk_id_replay_file = $1
-        AND player.source_player_key = source.source_player_key
-       LEFT JOIN fortnite_replay.tb_container_interaction AS interaction
-         ON interaction.fk_id_replay_file = $1
-        AND interaction.source_key = source.interaction_source_id`,
-      [replayFileId, matchId, JSON.stringify(rows)],
-    );
-    assertInsertedRows(rewardResult.rowCount, rewards.length, 'reward');
-  }
-
-  private async insertVehicleUsages(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    request: ReplayIngestionRequest,
-  ): Promise<void> {
-    const usages = request.vehicleUsages ?? [];
-    const catalogRows = usages.map((usage) => ({
-      vehicle_code: usage.vehicleCode,
-      display_name: usage.displayName ?? null,
-      vehicle_class: usage.vehicleClass ?? null,
-    }));
-    const usageResult = await client.query(
-      `WITH source AS (
-         SELECT DISTINCT ON (vehicle_code) vehicle_code, display_name, vehicle_class
-         FROM jsonb_to_recordset($1::jsonb) AS x(
-           vehicle_code text, display_name text, vehicle_class text
-         )
-         ORDER BY vehicle_code
-       )
-       INSERT INTO fortnite_replay.tb_vehicle AS existing
-         (vehicle_code, display_name, vehicle_class)
-       SELECT vehicle_code, display_name, vehicle_class
-       FROM source
-       ON CONFLICT (vehicle_code) DO UPDATE SET
-         display_name = COALESCE(EXCLUDED.display_name, existing.display_name),
-         vehicle_class = COALESCE(EXCLUDED.vehicle_class, existing.vehicle_class)`,
-      [JSON.stringify(catalogRows)],
-    );
-    const rows = usages.map((usage) => ({
-      source_id: usage.sourceId,
-      source_player_key: usage.sourcePlayerKey,
-      vehicle_code: usage.vehicleCode,
-      replay_vehicle_id: usage.replayVehicleId ?? null,
-      entered_at_seconds: usage.enteredAtSeconds ?? null,
-      exited_at_seconds: usage.exitedAtSeconds ?? null,
-    }));
-    await client.query(
-      `WITH source AS (
-         SELECT source_id, source_player_key, vehicle_code, replay_vehicle_id,
-                entered_at_seconds, exited_at_seconds
-         FROM jsonb_to_recordset($3::jsonb) AS x(
-           source_id text, source_player_key text, vehicle_code text,
-           replay_vehicle_id text, entered_at_seconds double precision,
-           exited_at_seconds double precision
-         )
-       )
-       INSERT INTO fortnite_replay.tb_player_vehicle_usage
-         (fk_id_replay_file, fk_id_match, fk_id_match_player, fk_id_vehicle,
-          source_key, replay_vehicle_id, entered_at_seconds, exited_at_seconds)
-       SELECT $1, $2, player.fk_id_match_player, vehicle.id_vehicle,
-              source.source_id, source.replay_vehicle_id,
-              source.entered_at_seconds, source.exited_at_seconds
-       FROM source
-       JOIN fortnite_replay.tb_match_player_source AS player
-         ON player.fk_id_replay_file = $1
-        AND player.source_player_key = source.source_player_key
-       JOIN fortnite_replay.tb_vehicle AS vehicle
-         ON vehicle.vehicle_code = source.vehicle_code`,
-      [replayFileId, matchId, JSON.stringify(rows)],
-    );
-    assertInsertedRows(usageResult.rowCount, usages.length, 'vehicle usage');
-  }
-
-  private async insertPoisAndVisits(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    request: ReplayIngestionRequest,
-  ): Promise<void> {
-    const pois = request.pois ?? [];
-    const poiRows = pois.map((poi) => ({
-      map_code: poi.mapCode,
-      season_code: poi.seasonCode ?? null,
-      poi_code: poi.poiCode,
-      display_name: poi.displayName,
-      center_x: poi.centerX ?? null,
-      center_y: poi.centerY ?? null,
-      center_z: poi.centerZ ?? null,
-      boundary_radius: poi.boundaryRadius ?? null,
-      coordinate_system: poi.coordinateSystem ?? null,
-    }));
-    const visitResult = await client.query(
-      `WITH source AS (
-         SELECT map_code, season_code, poi_code, display_name, center_x, center_y,
-                center_z, boundary_radius, coordinate_system
-         FROM jsonb_to_recordset($1::jsonb) AS x(
-           map_code text, season_code text, poi_code text, display_name text,
-           center_x double precision, center_y double precision, center_z double precision,
-           boundary_radius double precision, coordinate_system text
-         )
-       )
-       INSERT INTO fortnite_replay.tb_poi AS existing
-         (map_code, season_code, poi_code, display_name, center_x, center_y,
-          center_z, boundary_radius, coordinate_system)
-       SELECT map_code, season_code, poi_code, display_name, center_x, center_y,
-              center_z, boundary_radius, coordinate_system
-       FROM source
-       ON CONFLICT (map_code, season_code, poi_code) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         center_x = COALESCE(EXCLUDED.center_x, existing.center_x),
-         center_y = COALESCE(EXCLUDED.center_y, existing.center_y),
-         center_z = COALESCE(EXCLUDED.center_z, existing.center_z),
-         boundary_radius = COALESCE(EXCLUDED.boundary_radius, existing.boundary_radius),
-         coordinate_system = COALESCE(EXCLUDED.coordinate_system, existing.coordinate_system)`,
-      [JSON.stringify(poiRows)],
-    );
-    const visits = (request.poiVisits ?? []).map((visit) => ({
-      source_id: visit.sourceId,
-      source_player_key: visit.sourcePlayerKey,
-      poi_code: visit.poiCode,
-      season_code: visit.seasonCode ?? request.match.seasonCode ?? null,
-      started_at_seconds: visit.startedAtSeconds,
-      ended_at_seconds: visit.endedAtSeconds,
-      duration_seconds: visit.durationSeconds,
-      confidence: visit.confidence ?? null,
-      sample_count: visit.sampleCount ?? null,
-      detection_method: visit.detectionMethod ?? null,
-    }));
-    await client.query(
-      `WITH source AS (
-         SELECT source_id, source_player_key, poi_code, season_code,
-                started_at_seconds, ended_at_seconds, duration_seconds,
-                confidence, sample_count, detection_method
-         FROM jsonb_to_recordset($4::jsonb) AS x(
-           source_id text, source_player_key text, poi_code text, season_code text,
-           started_at_seconds double precision, ended_at_seconds double precision,
-           duration_seconds double precision, confidence double precision,
-           sample_count integer, detection_method text
-         )
-       )
-       INSERT INTO fortnite_replay.tb_player_poi_visit
-         (fk_id_match, fk_id_replay_file, source_key, fk_id_match_player, fk_id_poi,
-          started_at_seconds, ended_at_seconds, duration_seconds, confidence,
-          sample_count, detection_method)
-       SELECT $2, $1, source.source_id, player.fk_id_match_player, poi.id_poi,
-              source.started_at_seconds, source.ended_at_seconds,
-              source.duration_seconds, source.confidence, source.sample_count,
-              source.detection_method
-       FROM source
-       JOIN fortnite_replay.tb_match_player_source AS player
-         ON player.fk_id_replay_file = $1
-        AND player.source_player_key = source.source_player_key
-       JOIN fortnite_replay.tb_poi AS poi
-         ON poi.map_code = $3
-        AND poi.poi_code = source.poi_code
-        AND poi.season_code IS NOT DISTINCT FROM source.season_code`,
-      [replayFileId, matchId, request.match.mapCode ?? null, JSON.stringify(visits)],
-    );
-    assertInsertedRows(visitResult.rowCount, visits.length, 'POI visit');
-  }
-
-  private async insertSafeZones(
-    client: PoolClient,
-    replayFileId: number,
-    matchId: number,
-    request: ReplayIngestionRequest,
-  ): Promise<void> {
-    const rows = (request.safeZonePhases ?? []).map((phase) => ({
-      phase_number: phase.phaseNumber,
-      starts_at_seconds: phase.startsAtSeconds ?? null,
-      ends_at_seconds: phase.endsAtSeconds ?? null,
-      center_x: phase.centerX ?? null,
-      center_y: phase.centerY ?? null,
-      radius: phase.radius ?? null,
-    }));
-    const result = await client.query(
-      `WITH source AS (
-         SELECT phase_number, starts_at_seconds, ends_at_seconds, center_x,
-                center_y, radius
-         FROM jsonb_to_recordset($3::jsonb) AS x(
-           phase_number integer, starts_at_seconds double precision,
-           ends_at_seconds double precision, center_x double precision,
-           center_y double precision, radius double precision
-         )
-       )
-       INSERT INTO fortnite_replay.tb_safe_zone_phase
-         (fk_id_match, fk_id_replay_file, phase_number, starts_at_seconds,
-          ends_at_seconds, center_x, center_y, radius)
-       SELECT $2, $1, phase_number, starts_at_seconds, ends_at_seconds,
-              center_x, center_y, radius
-       FROM source`,
-      [replayFileId, matchId, JSON.stringify(rows)],
-    );
-    assertInsertedRows(result.rowCount, rows.length, 'Safe Zone phase');
-  }
-
-  private async loadAttempt(client: PoolClient, attemptId: number): Promise<ReplayProcessingAttempt> {
-    return mapAttempt(await this.loadAttemptRow(client, attemptId));
-  }
-
-  private async loadAttemptRow(
-    client: PoolClient,
-    attemptId: number,
-    forUpdate = false,
-  ): Promise<Record<string, unknown>> {
-    const result = await client.query(
-      `SELECT ${ATTEMPT_COLUMNS}
-       FROM fortnite_replay.tb_replay_processing_attempt AS a
-       JOIN fortnite_replay.tb_analyzer_version AS v
-         ON v.id_analyzer_version = a.fk_id_analyzer_version
-       WHERE a.id_attempt = $1
-       ${forUpdate ? 'FOR UPDATE OF a' : ''}`,
-      [attemptId],
-    );
-    if (result.rows.length === 0) {
-      throw new ReplayNotFoundError('Replay processing attempt was not found.');
+         UPDATE fortnite_replay.processing_attempt AS attempt
+         SET status = 'processing',
+             started_at = CURRENT_TIMESTAMP,
+             lease_expires_at = CURRENT_TIMESTAMP + make_interval(secs => $1),
+             worker_attempts = worker_attempts + 1
+         FROM candidate
+         WHERE attempt.id = candidate.id
+         RETURNING attempt.id, attempt.file_sha256, attempt.request_sha256,
+                   attempt.payload_sha256,
+                   attempt.original_payload, attempt.worker_attempts`,
+        [leaseSeconds],
+      );
+      await client.query('COMMIT');
+      transactionOpen = false;
+      if (!result.rows[0]) return null;
+      const row = result.rows[0];
+      return {
+        id: safeInteger(row.id, 'attempt id'),
+        fileSha256: String(row.file_sha256).trim(),
+        requestSha256: String(row.request_sha256).trim(),
+        payloadSha256: row.payload_sha256 === null
+          ? null : String(row.payload_sha256).trim(),
+        rawPayload: Buffer.isBuffer(row.original_payload) ? row.original_payload : null,
+        workerAttempts: safeInteger(row.worker_attempts, 'worker attempt count'),
+      };
+    } catch (error) {
+      if (transactionOpen) await rollback(client);
+      throw error;
+    } finally {
+      client.release();
     }
-    return result.rows[0];
+  }
+
+  async heartbeat(attemptId: number, leaseSeconds: number): Promise<void> {
+    await pool.query(
+      `UPDATE fortnite_replay.processing_attempt
+       SET lease_expires_at = CURRENT_TIMESTAMP + make_interval(secs => $2)
+       WHERE id = $1 AND status = 'processing'`,
+      [attemptId, leaseSeconds],
+    );
+  }
+
+  async failAttempt(attemptId: number, code: string, message: string, detail?: string): Promise<void> {
+    await pool.query(
+      `UPDATE fortnite_replay.processing_attempt
+       SET status = 'failed', completed_at = CURRENT_TIMESTAMP, lease_expires_at = NULL,
+           error_code = $2, error_message = $3, error_detail = $4
+       WHERE id = $1 AND status = 'processing'`,
+      [attemptId, code, message, detail ?? null],
+    );
+  }
+
+  async retryAttempt(attemptId: number, delaySeconds: number, message: string): Promise<void> {
+    await pool.query(
+      `UPDATE fortnite_replay.processing_attempt
+       SET status = 'accepted', started_at = NULL, completed_at = NULL,
+           lease_expires_at = NULL, available_at = CURRENT_TIMESTAMP + make_interval(secs => $2),
+           error_code = 'persistence_retry', error_message = $3
+       WHERE id = $1 AND status = 'failed'`,
+      [attemptId, delaySeconds, message],
+    );
   }
 
   private async tryAcquireAttemptLock(client: PoolClient, attemptId: number): Promise<boolean> {
@@ -1269,173 +606,1024 @@ export class ReplaysRepository {
     return result.rows[0]?.acquired === true;
   }
 
-  private async releaseAttemptLocks(
-    client: PoolClient,
-    attemptIds: number[],
-    fileSha256?: string,
-  ): Promise<Error | undefined> {
-    let releaseError: Error | undefined;
-    for (const attemptId of [...attemptIds].reverse()) {
-      try {
-        const result = await client.query(
-          'SELECT pg_advisory_unlock(hashtextextended($1, 0)) AS released',
-          [`replay-processing-attempt:${attemptId}`],
+  private async listAttemptPage(
+    key: 'file_sha256' | 'match_id',
+    value: string | number,
+    status: string | undefined,
+    page: number,
+    pageSize: number,
+  ): Promise<ListReplayFileProcessingAttempts200Response> {
+    const client = await pool.connect();
+    try {
+      if (key === 'file_sha256') {
+        const exists = await client.query(
+          'SELECT 1 FROM fortnite_replay.replay_file WHERE file_sha256 = $1',
+          [value],
         );
-        if (result.rows[0]?.released !== true) {
-          throw new Error('PostgreSQL advisory lock was not held by this connection.');
-        }
-      } catch (error) {
-        logReplayError('attempt_lock_release', fileSha256, attemptId, error);
-        releaseError ??= error instanceof Error ? error : new Error('Advisory lock release failed.');
+        if (exists.rowCount === 0) throw new ReplayNotFoundError('Replay file was not found.');
       }
+      const filters = [`${key === 'file_sha256' ? 'file_sha256' : 'match_id'} = $1`];
+      const values: unknown[] = [value];
+      if (status !== undefined) {
+        values.push(status);
+        filters.push(`status = $${values.length}`);
+      }
+      const where = filters.join(' AND ');
+      const from = key === 'file_sha256'
+        ? 'fortnite_replay.processing_attempt'
+        : `fortnite_replay.processing_attempt AS attempt
+           JOIN fortnite_replay.match_processing_attempt AS link
+             ON link.processing_attempt_id = attempt.id`;
+      const count = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM ${from} WHERE ${key === 'file_sha256' ? where : `link.match_id = $1${status === undefined ? '' : ' AND attempt.status = $2'}`}`,
+        values,
+      );
+      values.push(pageSize, (page - 1) * pageSize);
+      const result = await client.query(
+        `SELECT ${key === 'file_sha256' ? ATTEMPT_SELECT : ATTEMPT_SELECT.replace(/\b(id|file_sha256|application_id|idempotency_key|request_sha256|analyzer_version|application_version|parser_name|parser_version|parse_mode|status|error_code|error_message|received_at|started_at|completed_at)\b/g, 'attempt.$1')}
+         FROM ${from}
+         WHERE ${key === 'file_sha256' ? where : `link.match_id = $1${status === undefined ? '' : ' AND attempt.status = $2'}`}
+         ORDER BY ${key === 'file_sha256' ? 'received_at' : 'attempt.received_at'} DESC, ${key === 'file_sha256' ? 'id' : 'attempt.id'} DESC
+         LIMIT $${values.length - 1} OFFSET $${values.length}`,
+        values,
+      );
+      return {
+        success: true,
+        data: result.rows.map(mapAttempt),
+        pagination: pagination(page, pageSize, safeInteger(count.rows[0].count, 'attempt count')),
+      };
+    } finally {
+      client.release();
     }
-    return releaseError;
+  }
+
+  private async upsertMatch(
+    client: PoolClient,
+    identityKey: string,
+    data: ParserReplayData,
+    attemptId: number,
+  ): Promise<number> {
+    const match = data.match ?? {};
+    const game = match.gameData ?? {};
+    const stats = match.teamStats ?? {};
+    const result = await client.query(
+      `INSERT INTO fortnite_replay.game_match
+         (identity_key, game_session_id, replay_timestamp, replay_length_milliseconds,
+          replay_branch, utc_time_started_match, match_end_time, current_playlist,
+          map_info, additional_playlist_levels, active_gameplay_modifiers, recorder_id,
+          team_count, team_size, player_bots_left, players_left, teams_left, elapsed_time,
+          game_phase, safe_zone_phase, has_begun_play, total_player_structures,
+          winning_team, winning_player_ids, aircraft_start_time, safe_zones_start_time,
+          team_stats_position, team_stats_total_players,
+          max_players, total_teams, total_bots, tournament_round, is_large_team_game,
+          team_stats_unknown, team_stats_event_id, team_stats_event_group,
+          team_stats_event_metadata, team_stats_event_start_time, team_stats_event_end_time,
+          team_stats_event_size_in_bytes, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+               $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
+               $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, CURRENT_TIMESTAMP)
+       ON CONFLICT (identity_key) DO UPDATE SET
+         game_session_id = COALESCE(EXCLUDED.game_session_id, game_match.game_session_id),
+         replay_timestamp = COALESCE(EXCLUDED.replay_timestamp, game_match.replay_timestamp),
+         replay_length_milliseconds = COALESCE(EXCLUDED.replay_length_milliseconds, game_match.replay_length_milliseconds),
+         replay_branch = COALESCE(EXCLUDED.replay_branch, game_match.replay_branch),
+         utc_time_started_match = COALESCE(EXCLUDED.utc_time_started_match, game_match.utc_time_started_match),
+         match_end_time = COALESCE(EXCLUDED.match_end_time, game_match.match_end_time),
+         current_playlist = COALESCE(EXCLUDED.current_playlist, game_match.current_playlist),
+         map_info = COALESCE(EXCLUDED.map_info, game_match.map_info),
+         additional_playlist_levels = COALESCE(EXCLUDED.additional_playlist_levels, game_match.additional_playlist_levels),
+         active_gameplay_modifiers = COALESCE(EXCLUDED.active_gameplay_modifiers, game_match.active_gameplay_modifiers),
+         recorder_id = COALESCE(EXCLUDED.recorder_id, game_match.recorder_id),
+         team_count = COALESCE(EXCLUDED.team_count, game_match.team_count),
+         team_size = COALESCE(EXCLUDED.team_size, game_match.team_size),
+         player_bots_left = COALESCE(EXCLUDED.player_bots_left, game_match.player_bots_left),
+         players_left = COALESCE(EXCLUDED.players_left, game_match.players_left),
+         teams_left = COALESCE(EXCLUDED.teams_left, game_match.teams_left),
+         elapsed_time = COALESCE(EXCLUDED.elapsed_time, game_match.elapsed_time),
+         game_phase = COALESCE(EXCLUDED.game_phase, game_match.game_phase),
+         safe_zone_phase = COALESCE(EXCLUDED.safe_zone_phase, game_match.safe_zone_phase),
+         has_begun_play = COALESCE(EXCLUDED.has_begun_play, game_match.has_begun_play),
+         total_player_structures = COALESCE(EXCLUDED.total_player_structures, game_match.total_player_structures),
+         winning_team = COALESCE(EXCLUDED.winning_team, game_match.winning_team),
+         winning_player_ids = COALESCE(EXCLUDED.winning_player_ids, game_match.winning_player_ids),
+         aircraft_start_time = COALESCE(EXCLUDED.aircraft_start_time, game_match.aircraft_start_time),
+         safe_zones_start_time = COALESCE(EXCLUDED.safe_zones_start_time, game_match.safe_zones_start_time),
+         team_stats_position = COALESCE(EXCLUDED.team_stats_position, game_match.team_stats_position),
+         team_stats_total_players = COALESCE(EXCLUDED.team_stats_total_players, game_match.team_stats_total_players),
+         max_players = COALESCE(EXCLUDED.max_players, game_match.max_players),
+         total_teams = COALESCE(EXCLUDED.total_teams, game_match.total_teams),
+         total_bots = COALESCE(EXCLUDED.total_bots, game_match.total_bots),
+         tournament_round = COALESCE(EXCLUDED.tournament_round, game_match.tournament_round),
+         is_large_team_game = COALESCE(EXCLUDED.is_large_team_game, game_match.is_large_team_game),
+         team_stats_unknown = COALESCE(EXCLUDED.team_stats_unknown, game_match.team_stats_unknown),
+         team_stats_event_id = COALESCE(EXCLUDED.team_stats_event_id, game_match.team_stats_event_id),
+         team_stats_event_group = COALESCE(EXCLUDED.team_stats_event_group, game_match.team_stats_event_group),
+         team_stats_event_metadata = COALESCE(EXCLUDED.team_stats_event_metadata, game_match.team_stats_event_metadata),
+         team_stats_event_start_time = COALESCE(EXCLUDED.team_stats_event_start_time, game_match.team_stats_event_start_time),
+         team_stats_event_end_time = COALESCE(EXCLUDED.team_stats_event_end_time, game_match.team_stats_event_end_time),
+         team_stats_event_size_in_bytes = COALESCE(EXCLUDED.team_stats_event_size_in_bytes, game_match.team_stats_event_size_in_bytes),
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id`,
+      [
+        identityKey, game.gameSessionId ?? null, match.replayTimestamp ?? null,
+        match.replayLengthInMilliseconds ?? null, match.replayBranch ?? null,
+        game.utcTimeStartedMatch ?? null, game.matchEndTime ?? null,
+        game.currentPlaylist ?? null, game.mapInfo ?? null,
+        game.additionalPlaylistLevels ?? null, game.activeGameplayModifiers ?? null,
+        game.recorderId ?? null, game.teamCount ?? null, game.teamSize ?? null,
+        game.playerBotsLeft ?? null, game.playersLeft ?? null, game.teamsLeft ?? null,
+        game.elapsedTime ?? null, game.gamePhase ?? null, game.safeZonePhase ?? null,
+        game.hasBegunPlay ?? null, game.totalPlayerStructures ?? null,
+        game.winningTeam ?? null, game.winningPlayerIds ?? null,
+        game.aircraftStartTime ?? null, game.safeZonesStartTime ?? null,
+        stats.position ?? null, stats.totalPlayers ?? null,
+        game.maxPlayers ?? null, game.totalTeams ?? null, game.totalBots ?? null,
+        game.tournamentRound ?? null, game.isLargeTeamGame ?? null,
+        stats.unknown ?? null, stats.info?.id ?? null, stats.info?.group ?? null,
+        stats.info?.metadata ?? null, stats.info?.startTime ?? null,
+        stats.info?.endTime ?? null, stats.info?.sizeInBytes ?? null,
+      ],
+    );
+    const matchId = safeInteger(result.rows[0]?.id, 'match id');
+    await this.replaceArray(client, matchId, 'game_state_observation', data.match?.gameData?.gameStateObservations, async (rows) => {
+      await insertRows(client, 'game_state_observation', rows.map((row, observationIndex) => ({
+        match_id: matchId,
+        processing_attempt_id: attemptId,
+        observation_index: observationIndex,
+        world_time_seconds: row.worldTimeSeconds ?? null,
+        replicated_world_time_seconds: row.replicatedWorldTimeSeconds ?? null,
+        replicated_world_time_seconds_double: row.replicatedWorldTimeSecondsDouble ?? null,
+        has_begun_play: row.hasBegunPlay ?? null,
+        team_count: row.teamCount ?? null,
+        team_size: row.teamSize ?? null,
+        player_bots_left: row.playerBotsLeft ?? null,
+        players_left: row.playersLeft ?? null,
+        teams_left: row.teamsLeft ?? null,
+        elapsed_time: row.elapsedTime ?? null,
+        game_phase: row.gamePhase ?? null,
+        safe_zone_phase: row.safeZonePhase ?? null,
+      })), [
+        'match_id bigint', 'processing_attempt_id bigint', 'observation_index integer',
+        'world_time_seconds double precision', 'replicated_world_time_seconds real',
+        'replicated_world_time_seconds_double double precision', 'has_begun_play boolean',
+        'team_count integer', 'team_size integer',
+        'player_bots_left integer', 'players_left integer', 'teams_left integer',
+        'elapsed_time integer', 'game_phase integer', 'safe_zone_phase smallint',
+      ]);
+    });
+    return matchId;
+  }
+
+  private async recordSections(
+    client: PoolClient,
+    attemptId: number,
+    data: ParserReplayData,
+  ): Promise<void> {
+    const states: Array<[string, unknown, number | null]> = [
+      ['match', data.match, data.match && typeof data.match === 'object' ? 1 : null],
+      ['players', data.players, Array.isArray(data.players) ? data.players.length : null],
+      ['teams', data.teams, Array.isArray(data.teams) ? data.teams.length : null],
+      ['eventEliminations', data.eventEliminations, Array.isArray(data.eventEliminations) ? data.eventEliminations.length : null],
+      ['killFeed', data.killFeed, Array.isArray(data.killFeed) ? data.killFeed.length : null],
+      ['map', data.map, data.map && typeof data.map === 'object' ? 1 : null],
+      ['weapons', data.weapons, Array.isArray(data.weapons) ? data.weapons.length : null],
+      ['observations', data.observations, data.observations && typeof data.observations === 'object'
+        ? observationCount(data.observations) : null],
+    ];
+    await insertRows(client, 'processing_section', states.map(([section, value, count]) => ({
+      processing_attempt_id: attemptId,
+      section_name: section,
+      value_state: value === undefined ? 'missing' : value === null ? 'null' : 'present',
+      item_count: value === undefined || value === null ? null : count ?? 0,
+    })), [
+      'processing_attempt_id bigint', 'section_name text', 'value_state text', 'item_count integer',
+    ], 'ON CONFLICT (processing_attempt_id, section_name) DO UPDATE SET value_state = EXCLUDED.value_state, item_count = EXCLUDED.item_count');
+  }
+
+  private async persistPlayers(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    players: ParserReplayData['players'],
+  ): Promise<Map<number, number>> {
+    const playerIds = new Map<number, number>();
+    if (players == null) {
+      const current = await client.query(
+        `SELECT id, replay_player_id
+         FROM fortnite_replay.match_player
+         WHERE match_id = $1 AND replay_player_id IS NOT NULL`,
+        [matchId],
+      );
+      for (const row of current.rows) {
+        playerIds.set(
+          safeInteger(row.replay_player_id, 'replay player id'),
+          safeInteger(row.id, 'match player id'),
+        );
+      }
+      return playerIds;
+    }
+    await client.query('DELETE FROM fortnite_replay.match_player WHERE match_id = $1', [matchId]);
+    for (let index = 0; index < players.length; index += 1) {
+      const player = players[index];
+      const identityId = await this.upsertIdentity(client, player);
+      const result = await client.query(
+        `INSERT INTO fortnite_replay.match_player
+           (match_id, player_identity_id, replay_player_id, parser_player_id, epic_id,
+            platform_unique_net_id, bot_id, is_bot, player_name,
+            player_name_custom_override, streamer_mode_name, platform, level,
+            season_level_ui_display, player_number, team_index, is_party_leader,
+            is_replay_owner, is_game_session_owner, has_finished_loading,
+            has_started_playing, has_thanked_bus_driver, is_using_streamer_mode,
+            is_using_anonymous_mode, disconnected, reboot_counter, placement, kills,
+            team_kills, death_cause, death_circumstance, death_location_x,
+            death_location_y, death_location_z, death_time, death_time_double,
+            current_weapon_actor_id, cosmetics, inventory_id,
+            death_location_scale_factor, death_location_bits)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                 $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27,
+                 $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
+         RETURNING id`,
+        [
+          matchId, identityId, player.id ?? null, player.playerId ?? null,
+          player.epicId ?? null, player.platformUniqueNetId ?? null, player.botId ?? null,
+          player.isBot ?? null, player.playerName ?? null,
+          player.playerNameCustomOverride ?? null, player.streamerModeName ?? null,
+          player.platform ?? null, player.level ?? null, player.seasonLevelUIDisplay ?? null,
+          player.playerNumber ?? null, player.teamIndex ?? null, player.isPartyLeader ?? null,
+          player.isReplayOwner ?? null, player.isGameSessionOwner ?? null,
+          player.hasFinishedLoading ?? null, player.hasStartedPlaying ?? null,
+          player.hasThankedBusDriver ?? null, player.isUsingStreamerMode ?? null,
+          player.isUsingAnonymousMode ?? null, player.disconnected ?? null,
+          player.rebootCounter ?? null, player.placement ?? null, player.kills ?? null,
+          player.teamKills ?? null, player.deathCause ?? null, player.deathCircumstance ?? null,
+          player.deathLocation?.x ?? null, player.deathLocation?.y ?? null,
+          player.deathLocation?.z ?? null, player.deathTime ?? null,
+          player.deathTimeDouble ?? null, player.currentWeapon ?? null,
+          player.cosmetics == null ? null : JSON.stringify(player.cosmetics),
+          player.inventoryId ?? null, player.deathLocation?.scaleFactor ?? null,
+          player.deathLocation?.bits ?? null,
+        ],
+      );
+      const matchPlayerId = safeInteger(result.rows[0]?.id, 'match player id');
+      if (player.id !== undefined && player.id !== null) playerIds.set(player.id, matchPlayerId);
+      await insertRows(client, 'match_player_death_tag', (player.deathTags ?? []).map((tag, tagIndex) => ({
+        match_player_id: matchPlayerId,
+        tag_index: tagIndex,
+        tag,
+      })), ['match_player_id bigint', 'tag_index integer', 'tag text']);
+      const movements = (player.locations ?? []).map((sample, sampleIndex) => ({
+        match_id: matchId,
+        match_player_id: matchPlayerId,
+        processing_attempt_id: attemptId,
+        sample_key: digest(`${index}:${sampleIndex}:${stableSerialize(sample)}`),
+        pawn_actor_id: sample.pawnActorId ?? null,
+        replicated_world_time_seconds: sample.replicatedWorldTimeSeconds ?? null,
+        replicated_world_time_seconds_double: sample.replicatedWorldTimeSecondsDouble ?? null,
+        last_update_time: sample.lastUpdateTime ?? null,
+        location_x: sample.replicatedMovement?.location?.x ?? null,
+        location_y: sample.replicatedMovement?.location?.y ?? null,
+        location_z: sample.replicatedMovement?.location?.z ?? null,
+        rotation_pitch: sample.replicatedMovement?.rotation?.pitch ?? null,
+        rotation_yaw: sample.replicatedMovement?.rotation?.yaw ?? null,
+        rotation_roll: sample.replicatedMovement?.rotation?.roll ?? null,
+        linear_velocity_x: sample.replicatedMovement?.linearVelocity?.x ?? null,
+        linear_velocity_y: sample.replicatedMovement?.linearVelocity?.y ?? null,
+        linear_velocity_z: sample.replicatedMovement?.linearVelocity?.z ?? null,
+        angular_velocity_x: sample.replicatedMovement?.angularVelocity?.x ?? null,
+        angular_velocity_y: sample.replicatedMovement?.angularVelocity?.y ?? null,
+        angular_velocity_z: sample.replicatedMovement?.angularVelocity?.z ?? null,
+        acceleration_x: sample.replicatedMovement?.acceleration?.x ?? null,
+        acceleration_y: sample.replicatedMovement?.acceleration?.y ?? null,
+        acceleration_z: sample.replicatedMovement?.acceleration?.z ?? null,
+        is_simulated_physics_sleep: sample.replicatedMovement?.bSimulatedPhysicSleep ?? null,
+        is_replicating_physics: sample.replicatedMovement?.bRepPhysics ?? null,
+        is_replicating_acceleration: sample.replicatedMovement?.bRepAcceleration ?? null,
+        server_frame: sample.replicatedMovement?.serverFrame ?? null,
+        b_rep_movement_handle: sample.replicatedMovement?.handle ?? null,
+        location_quantization_level: sample.replicatedMovement?.locationQuantizationLevel ?? null,
+        velocity_quantization_level: sample.replicatedMovement?.velocityQuantizationLevel ?? null,
+        rotation_quantization_level: sample.replicatedMovement?.rotationQuantizationLevel ?? null,
+        replicated_movement_mode: sample.replicatedMovementMode ?? null,
+        current_movement_style: sample.currentMovementStyle ?? null,
+        is_sprinting: sample.bIsSprinting ?? null,
+        is_jumping: sample.bIsJumping ?? null,
+        is_crouched: sample.bIsCrouched ?? null,
+        is_slope_sliding: sample.bIsSlopeSliding ?? null,
+        is_ziplining: sample.bIsZiplining ?? null,
+        is_targeting: sample.bIsTargeting ?? null,
+        is_dbno: sample.bIsDBNO ?? null,
+        is_honking: sample.bIsHonking ?? null,
+        is_in_any_storm: sample.bIsInAnyStorm ?? null,
+        is_waiting_for_emote_interaction: sample.bIsWaitingForEmoteInteraction ?? null,
+        is_playing_emote: sample.bIsPlayingEmote ?? null,
+        is_skydiving: sample.bIsSkydiving ?? null,
+        is_skydiving_from_launch_pad: sample.bIsSkydivingFromLaunchPad ?? null,
+        is_skydiving_from_bus: sample.bIsSkydivingFromBus ?? null,
+        is_parachute_open: sample.bIsParachuteOpen ?? null,
+        is_parachute_forced_open: sample.bIsParachuteForcedOpen ?? null,
+        is_in_water_volume: sample.bIsInWaterVolume ?? null,
+        vehicle_actor_id: sample.vehicle ?? null,
+        vehicle_path: sample.vehiclePath ?? null,
+        seat_index: sample.seatIndex ?? null,
+      }));
+      await insertRows(client, 'movement_sample', movements, [
+        'match_id bigint', 'match_player_id bigint', 'processing_attempt_id bigint', 'sample_key char(64)',
+        'pawn_actor_id bigint', 'replicated_world_time_seconds real',
+        'replicated_world_time_seconds_double double precision', 'last_update_time real',
+        'location_x double precision', 'location_y double precision', 'location_z double precision',
+        'rotation_pitch double precision', 'rotation_yaw double precision', 'rotation_roll double precision',
+        'linear_velocity_x double precision', 'linear_velocity_y double precision', 'linear_velocity_z double precision',
+        'angular_velocity_x double precision', 'angular_velocity_y double precision', 'angular_velocity_z double precision',
+        'acceleration_x double precision', 'acceleration_y double precision', 'acceleration_z double precision',
+        'is_simulated_physics_sleep boolean', 'is_replicating_physics boolean',
+        'is_replicating_acceleration boolean', 'server_frame bigint', 'b_rep_movement_handle bigint',
+        'location_quantization_level integer', 'velocity_quantization_level integer',
+        'rotation_quantization_level integer', 'replicated_movement_mode integer',
+        'current_movement_style integer', 'is_sprinting boolean', 'is_jumping boolean',
+        'is_crouched boolean', 'is_slope_sliding boolean', 'is_ziplining boolean',
+        'is_targeting boolean', 'is_dbno boolean', 'is_honking boolean', 'is_in_any_storm boolean',
+        'is_waiting_for_emote_interaction boolean', 'is_playing_emote boolean', 'is_skydiving boolean',
+        'is_skydiving_from_launch_pad boolean', 'is_skydiving_from_bus boolean',
+        'is_parachute_open boolean', 'is_parachute_forced_open boolean', 'is_in_water_volume boolean',
+        'vehicle_actor_id bigint', 'vehicle_path text', 'seat_index smallint',
+      ]);
+    }
+    return playerIds;
+  }
+
+  private async upsertIdentity(
+    client: PoolClient,
+    player: NonNullable<ParserReplayData['players']>[number],
+  ): Promise<number | null> {
+    const identities = [
+      player.epicId ? `epic:${player.epicId}` : null,
+      player.botId ? `bot:${player.botId}` : null,
+      player.platformUniqueNetId ? `platform:${player.platformUniqueNetId}` : null,
+    ].filter((value): value is string => value !== null).sort();
+    if (identities.length === 0) return null;
+    for (const identity of identities) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [identity]);
+    }
+    const existing = await client.query(
+      `SELECT id FROM fortnite_replay.player_identity
+       WHERE ($1::text IS NOT NULL AND epic_id = $1)
+          OR ($2::text IS NOT NULL AND bot_id = $2)
+          OR ($3::text IS NOT NULL AND platform_unique_net_id = $3)
+       FOR UPDATE`,
+      [player.epicId ?? null, player.botId ?? null, player.platformUniqueNetId ?? null],
+    );
+    if (existing.rows.length > 1) {
+      throw new Error('Player identifiers resolve to multiple existing global identities.');
+    }
+    if (existing.rows[0]) {
+      const updated = await client.query(
+        `UPDATE fortnite_replay.player_identity
+         SET epic_id = COALESCE(epic_id, $2),
+             bot_id = COALESCE(bot_id, $3),
+             platform_unique_net_id = COALESCE(platform_unique_net_id, $4),
+             latest_player_name = COALESCE($5, latest_player_name),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 RETURNING id`,
+        [
+          existing.rows[0].id, player.epicId ?? null, player.botId ?? null,
+          player.platformUniqueNetId ?? null, player.playerName ?? null,
+        ],
+      );
+      return safeInteger(updated.rows[0]?.id, 'player identity id');
+    }
+    const inserted = await client.query(
+      `INSERT INTO fortnite_replay.player_identity
+         (epic_id, bot_id, platform_unique_net_id, latest_player_name)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [
+        player.epicId ?? null, player.botId ?? null,
+        player.platformUniqueNetId ?? null, player.playerName ?? null,
+      ],
+    );
+    return safeInteger(inserted.rows[0]?.id, 'player identity id');
+  }
+
+  private async persistStats(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    match: ParserReplayData['match'],
+  ): Promise<void> {
+    const stats = match?.stats;
+    if (stats == null) return;
+    await client.query(
+      `INSERT INTO fortnite_replay.match_stats
+         (match_id, processing_attempt_id, total_traveled, accuracy, unknown_value,
+          assists, eliminations, weapon_damage, other_damage, revives, damage_taken,
+          damage_to_structures, materials_gathered, materials_used,
+          event_id, event_group, event_metadata, event_start_time, event_end_time, event_size_in_bytes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+       ON CONFLICT (match_id) DO UPDATE SET
+         processing_attempt_id = EXCLUDED.processing_attempt_id,
+         total_traveled = COALESCE(EXCLUDED.total_traveled, match_stats.total_traveled),
+         accuracy = COALESCE(EXCLUDED.accuracy, match_stats.accuracy),
+         unknown_value = COALESCE(EXCLUDED.unknown_value, match_stats.unknown_value),
+         assists = COALESCE(EXCLUDED.assists, match_stats.assists),
+         eliminations = COALESCE(EXCLUDED.eliminations, match_stats.eliminations),
+         weapon_damage = COALESCE(EXCLUDED.weapon_damage, match_stats.weapon_damage),
+         other_damage = COALESCE(EXCLUDED.other_damage, match_stats.other_damage),
+         revives = COALESCE(EXCLUDED.revives, match_stats.revives),
+         damage_taken = COALESCE(EXCLUDED.damage_taken, match_stats.damage_taken),
+         damage_to_structures = COALESCE(EXCLUDED.damage_to_structures, match_stats.damage_to_structures),
+         materials_gathered = COALESCE(EXCLUDED.materials_gathered, match_stats.materials_gathered),
+         materials_used = COALESCE(EXCLUDED.materials_used, match_stats.materials_used),
+         event_id = COALESCE(EXCLUDED.event_id, match_stats.event_id),
+         event_group = COALESCE(EXCLUDED.event_group, match_stats.event_group),
+         event_metadata = COALESCE(EXCLUDED.event_metadata, match_stats.event_metadata),
+         event_start_time = COALESCE(EXCLUDED.event_start_time, match_stats.event_start_time),
+         event_end_time = COALESCE(EXCLUDED.event_end_time, match_stats.event_end_time),
+         event_size_in_bytes = COALESCE(EXCLUDED.event_size_in_bytes, match_stats.event_size_in_bytes)`,
+      [
+        matchId, attemptId, stats.totalTraveled ?? null, stats.accuracy ?? null,
+        stats.unknown ?? null, stats.assists ?? null, stats.eliminations ?? null,
+        stats.weaponDamage ?? null, stats.otherDamage ?? null, stats.revives ?? null,
+        stats.damageTaken ?? null, stats.damageToStructures ?? null,
+        stats.materialsGathered ?? null, stats.materialsUsed ?? null,
+        stats.info?.id ?? null, stats.info?.group ?? null, stats.info?.metadata ?? null,
+        stats.info?.startTime ?? null, stats.info?.endTime ?? null, stats.info?.sizeInBytes ?? null,
+      ],
+    );
+  }
+
+  private async persistTeams(
+    client: PoolClient,
+    matchId: number,
+    teams: ParserReplayData['teams'],
+    playerIds: Map<number, number>,
+  ): Promise<void> {
+    if (teams == null) return;
+    await client.query('DELETE FROM fortnite_replay.match_team WHERE match_id = $1', [matchId]);
+    for (let index = 0; index < teams.length; index += 1) {
+      const team = teams[index];
+      const inserted = await client.query(
+        `INSERT INTO fortnite_replay.match_team
+           (match_id, team_index, party_owner_replay_player_id, placement, team_kills)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [matchId, team.teamIndex ?? null, team.partyOwnerId ?? null, team.placement ?? null, team.teamKills ?? null],
+      );
+      const teamId = safeInteger(inserted.rows[0]?.id, 'team id');
+      const members = Math.max(team.playerIds?.length ?? 0, team.playerNames?.length ?? 0);
+      const rows = Array.from({ length: members }, (_, memberIndex) => {
+        const replayPlayerId = team.playerIds?.[memberIndex] ?? null;
+        return {
+          team_id: teamId,
+          match_id: matchId,
+          member_index: memberIndex,
+          replay_player_id: replayPlayerId,
+          match_player_id: replayPlayerId === null ? null : playerIds.get(replayPlayerId) ?? null,
+          player_name: team.playerNames?.[memberIndex] ?? null,
+        };
+      });
+      await insertRows(client, 'match_team_member', rows, [
+        'team_id bigint', 'match_id bigint', 'member_index integer',
+        'replay_player_id integer', 'match_player_id bigint', 'player_name text',
+      ]);
+    }
+  }
+
+  private async persistEliminations(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    events: ParserReplayData['eventEliminations'],
+  ): Promise<void> {
+    if (events == null) return;
+    await client.query('DELETE FROM fortnite_replay.event_elimination WHERE match_id = $1', [matchId]);
+    const rows = events.map((event, eventIndex) => ({
+      match_id: matchId,
+      processing_attempt_id: attemptId,
+      event_index: eventIndex,
+      source_event_key: digest(`${eventIndex}:${stableSerialize(event)}`),
+      event_id: event.eventInfo?.id ?? null,
+      event_group: event.eventInfo?.group ?? null,
+      event_metadata: event.eventInfo?.metadata ?? null,
+      event_start_time: event.eventInfo?.startTime ?? null,
+      event_end_time: event.eventInfo?.endTime ?? null,
+      event_size_in_bytes: event.eventInfo?.sizeInBytes ?? null,
+      eliminated_id: event.eliminated?.id ?? null,
+      eliminated_player_type: typeof event.eliminated?.playerType === 'string' ? event.eliminated.playerType : null,
+      eliminated_player_type_code: typeof event.eliminated?.playerType === 'number' ? event.eliminated.playerType : null,
+      eliminated_location_x: event.eliminated?.location?.x ?? null,
+      eliminated_location_y: event.eliminated?.location?.y ?? null,
+      eliminated_location_z: event.eliminated?.location?.z ?? null,
+      eliminated_location_scale_factor: event.eliminated?.location?.scaleFactor ?? null,
+      eliminated_location_bits: event.eliminated?.location?.bits ?? null,
+      eliminated_rotation_x: event.eliminated?.rotation?.x ?? null,
+      eliminated_rotation_y: event.eliminated?.rotation?.y ?? null,
+      eliminated_rotation_z: event.eliminated?.rotation?.z ?? null,
+      eliminated_rotation_w: event.eliminated?.rotation?.w ?? null,
+      eliminated_scale_x: event.eliminated?.scale?.x ?? null,
+      eliminated_scale_y: event.eliminated?.scale?.y ?? null,
+      eliminated_scale_z: event.eliminated?.scale?.z ?? null,
+      eliminated_scale_scale_factor: event.eliminated?.scale?.scaleFactor ?? null,
+      eliminated_scale_bits: event.eliminated?.scale?.bits ?? null,
+      eliminator_id: event.eliminator?.id ?? null,
+      eliminator_player_type: typeof event.eliminator?.playerType === 'string' ? event.eliminator.playerType : null,
+      eliminator_player_type_code: typeof event.eliminator?.playerType === 'number' ? event.eliminator.playerType : null,
+      eliminator_location_x: event.eliminator?.location?.x ?? null,
+      eliminator_location_y: event.eliminator?.location?.y ?? null,
+      eliminator_location_z: event.eliminator?.location?.z ?? null,
+      eliminator_location_scale_factor: event.eliminator?.location?.scaleFactor ?? null,
+      eliminator_location_bits: event.eliminator?.location?.bits ?? null,
+      eliminator_rotation_x: event.eliminator?.rotation?.x ?? null,
+      eliminator_rotation_y: event.eliminator?.rotation?.y ?? null,
+      eliminator_rotation_z: event.eliminator?.rotation?.z ?? null,
+      eliminator_rotation_w: event.eliminator?.rotation?.w ?? null,
+      eliminator_scale_x: event.eliminator?.scale?.x ?? null,
+      eliminator_scale_y: event.eliminator?.scale?.y ?? null,
+      eliminator_scale_z: event.eliminator?.scale?.z ?? null,
+      eliminator_scale_scale_factor: event.eliminator?.scale?.scaleFactor ?? null,
+      eliminator_scale_bits: event.eliminator?.scale?.bits ?? null,
+      gun_type: event.gunType ?? null,
+      knocked: event.knocked ?? null,
+      library_distance: event.libraryDistance ?? null,
+    }));
+    await insertRows(client, 'event_elimination', rows, [
+      'match_id bigint', 'processing_attempt_id bigint', 'event_index integer',
+      'source_event_key char(64)', 'event_id text', 'event_group text', 'event_metadata text',
+      'event_start_time double precision', 'event_end_time double precision',
+      'event_size_in_bytes integer', 'eliminated_id text', 'eliminated_player_type text',
+      'eliminated_player_type_code integer',
+      'eliminated_location_x double precision', 'eliminated_location_y double precision',
+      'eliminated_location_z double precision', 'eliminated_location_scale_factor integer',
+      'eliminated_location_bits integer', 'eliminated_rotation_x double precision',
+      'eliminated_rotation_y double precision', 'eliminated_rotation_z double precision',
+      'eliminated_rotation_w double precision', 'eliminated_scale_x double precision',
+      'eliminated_scale_y double precision', 'eliminated_scale_z double precision',
+      'eliminated_scale_scale_factor integer', 'eliminated_scale_bits integer',
+      'eliminator_id text', 'eliminator_player_type text',
+      'eliminator_player_type_code integer',
+      'eliminator_location_x double precision', 'eliminator_location_y double precision',
+      'eliminator_location_z double precision', 'eliminator_location_scale_factor integer',
+      'eliminator_location_bits integer', 'eliminator_rotation_x double precision',
+      'eliminator_rotation_y double precision', 'eliminator_rotation_z double precision',
+      'eliminator_rotation_w double precision', 'eliminator_scale_x double precision',
+      'eliminator_scale_y double precision', 'eliminator_scale_z double precision',
+      'eliminator_scale_scale_factor integer', 'eliminator_scale_bits integer',
+      'gun_type smallint', 'knocked boolean', 'library_distance double precision',
+    ]);
+  }
+
+  private async persistKillFeed(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    entries: ParserReplayData['killFeed'],
+  ): Promise<void> {
+    if (entries == null) return;
+    await client.query('DELETE FROM fortnite_replay.kill_feed WHERE match_id = $1', [matchId]);
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      const inserted = await client.query(
+        `INSERT INTO fortnite_replay.kill_feed
+           (match_id, processing_attempt_id, event_index, source_event_key,
+            player_replay_id, player_name, player_is_bot, finisher_or_downer_replay_id,
+            finisher_or_downer_name, finisher_or_downer_is_bot,
+            replicated_world_time_seconds, replicated_world_time_seconds_double,
+            distance, death_cause, death_circumstance, death_location_x,
+            death_location_y, death_location_z, is_downed, is_revived,
+            death_location_scale_factor, death_location_bits)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                 $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING id`,
+        [
+          matchId, attemptId, index, digest(`${index}:${stableSerialize(entry)}`),
+          entry.playerId ?? null, entry.playerName ?? null, entry.playerIsBot ?? null,
+          entry.finisherOrDowner ?? null, entry.finisherOrDownerName ?? null,
+          entry.finisherOrDownerIsBot ?? null, entry.replicatedWorldTimeSeconds ?? null,
+          entry.replicatedWorldTimeSecondsDouble ?? null, entry.distance ?? null,
+          entry.deathCause ?? null, entry.deathCircumstance ?? null,
+          entry.deathLocation?.x ?? null, entry.deathLocation?.y ?? null,
+          entry.deathLocation?.z ?? null, entry.isDowned ?? null, entry.isRevived ?? null,
+          entry.deathLocation?.scaleFactor ?? null, entry.deathLocation?.bits ?? null,
+        ],
+      );
+      const id = safeInteger(inserted.rows[0]?.id, 'kill-feed id');
+      await insertRows(client, 'kill_feed_death_tag', (entry.deathTags ?? []).map((tag, tagIndex) => ({
+        kill_feed_id: id,
+        tag_index: tagIndex,
+        tag,
+      })), ['kill_feed_id bigint', 'tag_index integer', 'tag text']);
+    }
+  }
+
+  private async persistMap(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    map: ParserReplayData['map'],
+  ): Promise<void> {
+    if (map == null) return;
+    await client.query(
+      `INSERT INTO fortnite_replay.map_snapshot
+         (match_id, processing_attempt_id, world_grid_start_x, world_grid_start_y,
+          world_grid_end_x, world_grid_end_y, world_grid_spacing_x, world_grid_spacing_y,
+          world_grid_total_size_x, world_grid_total_size_y, grid_count_x, grid_count_y,
+          poi_tag_container_table_size)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (match_id) DO UPDATE SET
+         processing_attempt_id = EXCLUDED.processing_attempt_id,
+         world_grid_start_x = COALESCE(EXCLUDED.world_grid_start_x, map_snapshot.world_grid_start_x),
+         world_grid_start_y = COALESCE(EXCLUDED.world_grid_start_y, map_snapshot.world_grid_start_y),
+         world_grid_end_x = COALESCE(EXCLUDED.world_grid_end_x, map_snapshot.world_grid_end_x),
+         world_grid_end_y = COALESCE(EXCLUDED.world_grid_end_y, map_snapshot.world_grid_end_y),
+         world_grid_spacing_x = COALESCE(EXCLUDED.world_grid_spacing_x, map_snapshot.world_grid_spacing_x),
+         world_grid_spacing_y = COALESCE(EXCLUDED.world_grid_spacing_y, map_snapshot.world_grid_spacing_y),
+         world_grid_total_size_x = COALESCE(EXCLUDED.world_grid_total_size_x, map_snapshot.world_grid_total_size_x),
+         world_grid_total_size_y = COALESCE(EXCLUDED.world_grid_total_size_y, map_snapshot.world_grid_total_size_y),
+         grid_count_x = COALESCE(EXCLUDED.grid_count_x, map_snapshot.grid_count_x),
+         grid_count_y = COALESCE(EXCLUDED.grid_count_y, map_snapshot.grid_count_y),
+         poi_tag_container_table_size = COALESCE(EXCLUDED.poi_tag_container_table_size, map_snapshot.poi_tag_container_table_size)`,
+      [
+        matchId, attemptId, map.worldGridStart?.x ?? null, map.worldGridStart?.y ?? null,
+        map.worldGridEnd?.x ?? null, map.worldGridEnd?.y ?? null,
+        map.worldGridSpacing?.x ?? null, map.worldGridSpacing?.y ?? null,
+        map.worldGridTotalSize?.x ?? null, map.worldGridTotalSize?.y ?? null,
+        map.gridCountX ?? null, map.gridCountY ?? null, map.poiTagContainerTableSize ?? null,
+      ],
+    );
+    await this.replaceArray(client, matchId, 'map_poi_tag', map.poiTagContainerTable, async (tags) => {
+      await insertRows(client, 'map_poi_tag', tags.map((tag, index) => ({
+        match_id: matchId, tag_index: index, poi_tag: tag,
+      })), ['match_id bigint', 'tag_index integer', 'poi_tag text']);
+    });
+    await this.replaceArray(client, matchId, 'battle_bus_flight_path', map.battleBusFlightPaths, async (items) => {
+      await insertRows(client, 'battle_bus_flight_path', items.map((item, index) => ({
+        match_id: matchId, path_index: item.index ?? index,
+        start_x: item.start?.x ?? null, start_y: item.start?.y ?? null, start_z: item.start?.z ?? null,
+        rotation_pitch: item.rotation?.pitch ?? null, rotation_yaw: item.rotation?.yaw ?? null,
+        rotation_roll: item.rotation?.roll ?? null, velocity_x: item.velocity?.x ?? null,
+        velocity_y: item.velocity?.y ?? null, velocity_z: item.velocity?.z ?? null,
+        flight_time: item.flightTime ?? null, drop_time: item.dropTime ?? null, skin: item.skin ?? null,
+      })), [
+        'match_id bigint', 'path_index integer', 'start_x double precision',
+        'start_y double precision', 'start_z double precision', 'rotation_pitch double precision',
+        'rotation_yaw double precision', 'rotation_roll double precision', 'velocity_x double precision',
+        'velocity_y double precision', 'velocity_z double precision', 'flight_time double precision',
+        'drop_time double precision', 'skin text',
+      ]);
+    });
+    await this.replaceArray(client, matchId, 'map_safe_zone', map.safeZones, async (items) => {
+      await insertRows(client, 'map_safe_zone', items.map((item, index) => ({
+        match_id: matchId, source_index: index, center_x: item.center?.x ?? null,
+        center_y: item.center?.y ?? null, center_z: item.center?.z ?? null, radius: item.radius ?? null,
+        start_shrink_time: item.startShrinkTime ?? null, finish_shrink_time: item.finishShrinkTime ?? null,
+        last_radius: item.lastRadius ?? null, next_radius: item.nextRadius ?? null,
+        next_next_radius: item.nextNextRadius ?? null,
+        last_center_x: item.lastCenter?.x ?? null, last_center_y: item.lastCenter?.y ?? null,
+        last_center_z: item.lastCenter?.z ?? null, last_center_scale_factor: item.lastCenter?.scaleFactor ?? null,
+        last_center_bits: item.lastCenter?.bits ?? null,
+        next_center_x: item.nextCenter?.x ?? null, next_center_y: item.nextCenter?.y ?? null,
+        next_center_z: item.nextCenter?.z ?? null, next_center_scale_factor: item.nextCenter?.scaleFactor ?? null,
+        next_center_bits: item.nextCenter?.bits ?? null,
+        next_next_center_x: item.nextNextCenter?.x ?? null, next_next_center_y: item.nextNextCenter?.y ?? null,
+        next_next_center_z: item.nextNextCenter?.z ?? null, next_next_center_scale_factor: item.nextNextCenter?.scaleFactor ?? null,
+        next_next_center_bits: item.nextNextCenter?.bits ?? null,
+      })), [
+        'match_id bigint', 'source_index integer', 'center_x double precision', 'center_y double precision',
+        'center_z double precision', 'radius double precision', 'start_shrink_time real', 'finish_shrink_time real',
+        'last_radius real', 'next_radius real', 'next_next_radius real',
+        'last_center_x double precision', 'last_center_y double precision', 'last_center_z double precision',
+        'last_center_scale_factor integer', 'last_center_bits integer',
+        'next_center_x double precision', 'next_center_y double precision', 'next_center_z double precision',
+        'next_center_scale_factor integer', 'next_center_bits integer',
+        'next_next_center_x double precision', 'next_next_center_y double precision', 'next_next_center_z double precision',
+        'next_next_center_scale_factor integer', 'next_next_center_bits integer',
+      ]);
+    });
+    await this.replaceArray(client, matchId, 'map_llama', map.llamas, async (items) => {
+      await insertRows(client, 'map_llama', items.map((item) => ({
+        match_id: matchId, source_actor_key: null, position_x: item.position?.x ?? null,
+        position_y: item.position?.y ?? null, position_z: item.position?.z ?? null,
+        destination_x: item.destination?.x ?? null, destination_y: item.destination?.y ?? null,
+        destination_z: item.destination?.z ?? null, looted: item.looted ?? null,
+      })), ['match_id bigint', 'source_actor_key text', 'position_x double precision', 'position_y double precision', 'position_z double precision', 'destination_x double precision', 'destination_y double precision', 'destination_z double precision', 'looted boolean']);
+    });
+    await this.replaceArray(client, matchId, 'map_supply_drop', map.supplyDrops, async (items) => {
+      await insertRows(client, 'map_supply_drop', items.map((item) => ({
+        match_id: matchId, source_actor_key: null,
+        landing_x: item.landingPosition?.x ?? null, landing_y: item.landingPosition?.y ?? null,
+        landing_z: item.landingPosition?.z ?? null, fall_x: item.fallPosition?.x ?? null,
+        fall_y: item.fallPosition?.y ?? null, fall_z: item.fallPosition?.z ?? null,
+        balloon_x: item.balloonPosition?.x ?? null, balloon_y: item.balloonPosition?.y ?? null,
+        balloon_z: item.balloonPosition?.z ?? null, looted: item.looted ?? null,
+      })), ['match_id bigint', 'source_actor_key text', 'landing_x double precision', 'landing_y double precision', 'landing_z double precision', 'fall_x double precision', 'fall_y double precision', 'fall_z double precision', 'balloon_x double precision', 'balloon_y double precision', 'balloon_z double precision', 'looted boolean']);
+    });
+    await this.replaceArray(client, matchId, 'map_reboot_van', map.rebootVans, async (items) => {
+      await insertRows(client, 'map_reboot_van', items.map((item) => ({
+        match_id: matchId, source_actor_key: item.guid ?? null, actor_guid: item.guid ?? null,
+        actor_handle: item.handle ?? null, location_x: item.location?.x ?? null,
+        location_y: item.location?.y ?? null, location_z: item.location?.z ?? null,
+        state: item.state ?? null,
+      })), ['match_id bigint', 'source_actor_key text', 'actor_guid text', 'actor_handle bigint', 'location_x double precision', 'location_y double precision', 'location_z double precision', 'state integer']);
+    });
+  }
+
+  private async persistWeapons(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    weapons: ParserReplayData['weapons'],
+  ): Promise<void> {
+    if (weapons == null) return;
+    await client.query('DELETE FROM fortnite_replay.weapon_observation WHERE match_id = $1', [matchId]);
+    await insertRows(client, 'weapon_observation', weapons.map((item) => ({
+      match_id: matchId, processing_attempt_id: attemptId, actor_id: item.actorId ?? null,
+      weapon_name: item.weaponName ?? null, ammo_count: item.ammoCount ?? null,
+      weapon_level: item.weaponLevel ?? null, last_fire_time_verified: item.lastFireTimeVerified ?? null,
+      is_equipping_weapon: item.bIsEquippingWeapon ?? null,
+      is_reloading_weapon: item.bIsReloadingWeapon ?? null,
+      value_a: item.a ?? item.A ?? null, value_b: item.b ?? item.B ?? null,
+      value_c: item.c ?? item.C ?? null, value_d: item.d ?? item.D ?? null,
+    })), [
+      'match_id bigint', 'processing_attempt_id bigint', 'actor_id bigint',
+      'weapon_name text', 'ammo_count integer', 'weapon_level integer',
+      'last_fire_time_verified real', 'is_equipping_weapon boolean', 'is_reloading_weapon boolean',
+      'value_a bigint', 'value_b bigint', 'value_c bigint', 'value_d bigint',
+    ]);
+  }
+
+  private async persistObservations(
+    client: PoolClient,
+    matchId: number,
+    attemptId: number,
+    observations: ParserReplayData['observations'],
+    normalizationMetrics?: ContainerNormalizationMetrics,
+  ): Promise<ContainerPersistenceMetrics> {
+    let containerInsertCount = 0;
+    const observedData = observations ?? {};
+    const containerEvents = observedData.containerInteractions;
+    await this.replaceArray(client, matchId, 'equipped_item_observation', observedData.equippedItems, async (items) => {
+      await insertRows(client, 'equipped_item_observation', items.map((item, index) => ({
+        match_id: matchId, processing_attempt_id: attemptId, observation_index: index,
+        time_seconds: item.timeSeconds ?? null, item_name: item.item ?? item.name ?? null,
+        pawn_actor_id: item.pawnActorId ?? null, player_replay_id: item.playerId ?? null,
+      })), ['match_id bigint', 'processing_attempt_id bigint', 'observation_index integer', 'time_seconds double precision', 'item_name text', 'pawn_actor_id bigint', 'player_replay_id integer']);
+    });
+    await this.replaceArray(client, matchId, 'container_interaction', observedData.containerInteractions, async (items) => {
+      containerInsertCount = await insertRows(client, 'container_interaction', items.map((item, index) => ({
+        match_id: matchId, processing_attempt_id: attemptId, observation_index: index,
+        source_actor_key: item.sourceActorKey ?? null,
+        container_label: item.containerLabel ?? null,
+        interaction_kind: null,
+        time_seconds: item.timeSeconds ?? null,
+        searching_pawn_actor_id: item.searchingPawnActorId ?? null,
+        searching_player_state_actor_id: item.searchingPlayerStateActorId ?? null,
+        searching_player_replay_id: item.searchingPlayerId ?? null,
+        already_searched: item.alreadySearched ?? null,
+        search_animation_count: item.searchAnimationCount ?? null,
+        destroyed: item.destroyed ?? null,
+      })), [
+        'match_id bigint', 'processing_attempt_id bigint', 'observation_index integer',
+        'source_actor_key text', 'container_label text', 'interaction_kind text',
+        'time_seconds double precision', 'searching_pawn_actor_id bigint',
+        'searching_player_state_actor_id bigint', 'searching_player_replay_id integer',
+        'already_searched boolean', 'search_animation_count bigint', 'destroyed boolean',
+      ]);
+    });
+    await this.replaceArray(client, matchId, 'dropped_item_observation', observedData.droppedItems, async (items) => {
+      await insertRows(client, 'dropped_item_observation', items.map((item, index) => ({
+        match_id: matchId, processing_attempt_id: attemptId, observation_index: index,
+        time_seconds: item.timeSeconds ?? null, item: item.item ?? null,
+        item_definition_actor_id: item.itemDefinitionActorId ?? null,
+        item_definition_path: item.itemDefinitionPath ?? null, item_count: item.count ?? null,
+        durability: item.durability ?? null, level: item.level ?? null,
+        loaded_ammo: item.loadedAmmo ?? null, order_index: item.orderIndex ?? null,
+        item_owner: item.itemOwner ?? null, pawn_who_dropped_pickup: item.pawnWhoDroppedPickup ?? null,
+        owner: item.owner ?? null, dropped_by_player_replay_id: item.droppedByPlayerId ?? null,
+        replicated_location_x: item.replicatedLocation?.x ?? null,
+        replicated_location_y: item.replicatedLocation?.y ?? null,
+        replicated_location_z: item.replicatedLocation?.z ?? null,
+        replicated_location_scale_factor: item.replicatedLocation?.scaleFactor ?? null,
+        replicated_location_bits: item.replicatedLocation?.bits ?? null,
+        loot_initial_position_x: item.lootInitialPosition?.x ?? null,
+        loot_initial_position_y: item.lootInitialPosition?.y ?? null,
+        loot_initial_position_z: item.lootInitialPosition?.z ?? null,
+        loot_initial_position_scale_factor: item.lootInitialPosition?.scaleFactor ?? null,
+        loot_initial_position_bits: item.lootInitialPosition?.bits ?? null,
+        loot_final_position_x: item.lootFinalPosition?.x ?? null,
+        loot_final_position_y: item.lootFinalPosition?.y ?? null,
+        loot_final_position_z: item.lootFinalPosition?.z ?? null,
+        loot_final_position_scale_factor: item.lootFinalPosition?.scaleFactor ?? null,
+        loot_final_position_bits: item.lootFinalPosition?.bits ?? null,
+        final_toss_rest_location_x: item.finalTossRestLocation?.x ?? null,
+        final_toss_rest_location_y: item.finalTossRestLocation?.y ?? null,
+        final_toss_rest_location_z: item.finalTossRestLocation?.z ?? null,
+        final_toss_rest_location_scale_factor: item.finalTossRestLocation?.scaleFactor ?? null,
+        final_toss_rest_location_bits: item.finalTossRestLocation?.bits ?? null,
+        fly_time: item.flyTime ?? null, toss_state: item.tossState ?? null,
+        picked_up: item.pickedUp ?? null,
+      })), [
+        'match_id bigint', 'processing_attempt_id bigint', 'observation_index integer',
+        'time_seconds double precision', 'item text', 'item_definition_actor_id bigint',
+        'item_definition_path text', 'item_count integer', 'durability double precision',
+        'level integer', 'loaded_ammo integer', 'order_index integer', 'item_owner bigint',
+        'pawn_who_dropped_pickup bigint', 'owner bigint', 'dropped_by_player_replay_id integer',
+        'replicated_location_x double precision', 'replicated_location_y double precision',
+        'replicated_location_z double precision', 'loot_initial_position_x double precision',
+        'replicated_location_scale_factor integer', 'replicated_location_bits integer',
+        'loot_initial_position_y double precision', 'loot_initial_position_z double precision',
+        'loot_initial_position_scale_factor integer', 'loot_initial_position_bits integer',
+        'loot_final_position_x double precision', 'loot_final_position_y double precision',
+        'loot_final_position_z double precision', 'final_toss_rest_location_x double precision',
+        'loot_final_position_scale_factor integer', 'loot_final_position_bits integer',
+        'final_toss_rest_location_y double precision', 'final_toss_rest_location_z double precision',
+        'final_toss_rest_location_scale_factor integer', 'final_toss_rest_location_bits integer',
+        'fly_time double precision', 'toss_state integer', 'picked_up boolean',
+      ]);
+    });
+    await this.replaceArray(client, matchId, 'treasure_event', observedData.treasureEvents, async (items) => {
+      await insertRows(client, 'treasure_event', items.map((item, index) => ({
+        match_id: matchId, processing_attempt_id: attemptId, observation_index: index,
+        time_seconds: item.timeSeconds ?? null, prize_id: item.prizeId ?? null,
+        pawn_actor_id: item.pawnActorId ?? null, player_replay_id: item.playerId ?? null,
+        source_container: item.sourceContainer ?? null,
+      })), ['match_id bigint', 'processing_attempt_id bigint', 'observation_index integer', 'time_seconds double precision', 'prize_id text', 'pawn_actor_id bigint', 'player_replay_id integer', 'source_container text']);
+    });
+    await this.replaceArray(client, matchId, 'prize_handler_grant', observedData.prizeHandlerGrants, async (items) => {
+      await insertRows(client, 'prize_handler_grant', items.map((item, index) => ({
+        match_id: matchId, processing_attempt_id: attemptId, observation_index: index,
+        handler: item.handler ?? null, time_seconds: item.time ?? null,
+        player_state_actor_id: item.playerState ?? null, player_replay_id: item.playerId ?? null,
+      })), ['match_id bigint', 'processing_attempt_id bigint', 'observation_index integer', 'handler text', 'time_seconds double precision', 'player_state_actor_id bigint', 'player_replay_id integer']);
+    });
+    const countResult = await client.query(
+      `SELECT COUNT(*)::text AS persisted,
+              COUNT(*) FILTER (WHERE event.searching_player_replay_id IS NULL)::text AS player_unidentified,
+              COUNT(*) FILTER (
+                WHERE event.searching_player_replay_id IS NOT NULL AND player.id IS NULL
+              )::text AS player_unmatched,
+              COUNT(*) FILTER (WHERE player.id IS NOT NULL)::text AS player_linked
+       FROM fortnite_replay.container_interaction AS event
+       LEFT JOIN fortnite_replay.match_player AS player
+         ON player.match_id = event.match_id
+        AND player.replay_player_id = event.searching_player_replay_id
+       WHERE event.processing_attempt_id = $1`,
+      [attemptId],
+    );
+    const counts = countResult.rows[0] as Record<string, unknown> | undefined;
+    if (!counts) throw new Error('Container persistence metrics were not returned.');
+    const persisted = safeInteger(counts.persisted, 'persisted container count');
+    if (persisted !== containerInsertCount) {
+      throw new Error('Persisted container count does not match the inserted row count.');
+    }
+    const detected = normalizationMetrics?.detected ?? containerEvents?.length ?? 0;
+    const valid = normalizationMetrics?.valid ?? containerEvents?.length ?? 0;
+    return {
+      provided: normalizationMetrics?.provided ?? (containerEvents !== undefined),
+      detected,
+      valid,
+      rejected: normalizationMetrics?.rejected ?? Math.max(0, detected - valid),
+      exactDuplicates: normalizationMetrics?.exactDuplicates ?? 0,
+      fieldIssues: normalizationMetrics?.fieldIssues ?? 0,
+      persisted,
+      playerLinked: safeInteger(counts.player_linked, 'player-linked container count'),
+      playerUnidentified: safeInteger(counts.player_unidentified, 'unidentified container count'),
+      playerUnmatched: safeInteger(counts.player_unmatched, 'unmatched player count'),
+      rejectionSamples: normalizationMetrics?.rejectionSamples ?? [],
+    };
+  }
+
+  private async replaceArray<T>(
+    client: PoolClient,
+    matchId: number,
+    table: string,
+    rows: T[] | null | undefined,
+    persist: (rows: T[]) => Promise<void>,
+  ): Promise<void> {
+    if (rows == null) return;
+    await client.query(`DELETE FROM fortnite_replay.${table} WHERE match_id = $1`, [matchId]);
+    await persist(rows);
+  }
+
+  private async loadAttempt(client: PoolClient, id: number): Promise<ReplayProcessingAttempt> {
+    const result = await client.query(
+      `SELECT ${ATTEMPT_SELECT} FROM fortnite_replay.processing_attempt WHERE id = $1`,
+      [id],
+    );
+    if (!result.rows[0]) throw new Error('Replay attempt could not be reloaded.');
+    return mapAttempt(result.rows[0]);
   }
 }
 
-function mapFile(row: Record<string, unknown>): ReplayFile {
+async function insertRows(
+  client: PoolClient,
+  table: string,
+  rows: Array<Record<string, unknown>>,
+  definitions: string[],
+  conflictClause = '',
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const columns = definitions.map((definition) => definition.split(' ')[0]);
+  const columnList = columns.join(', ');
+  const selection = columns.map((column) => `source.${column}`).join(', ');
+  const result = await client.query(
+    `INSERT INTO fortnite_replay.${table} (${columnList})
+     SELECT ${selection}
+     FROM jsonb_to_recordset($1::jsonb) AS source(${definitions.join(', ')})
+     ${conflictClause}`,
+    [JSON.stringify(rows)],
+  );
+  return result.rowCount ?? 0;
+}
+
+function mapReplayFile(row: Record<string, unknown>): ListReplayFiles200Response['data'][number] {
   return {
-    id: safeInteger(row.id_replay_file, 'replay file id'),
-    fileSha256: String(row.file_sha256),
-    matchId: nullableInteger(row.fk_id_match, 'match id'),
-    successfulAttemptId: nullableInteger(row.fk_id_successful_attempt, 'successful attempt id'),
-    fileSizeBytes: nullableInteger(row.file_size_bytes, 'file size'),
-    fileCreatedAt: nullableTimestamp(row.file_created_at),
-    createdAt: requiredTimestamp(row.created_at, 'file created at'),
-    fileName: String(row.file_name),
+    file_sha256: String(row.file_sha256).trim(),
+    first_registered_at: timestamp(row.first_registered_at),
+    application_ids: Array.isArray(row.application_ids) ? row.application_ids.map(String) : [],
+    latest_received_at: nullableTimestamp(row.latest_received_at),
+    processing_attempt_count: safeInteger(row.processing_attempt_count, 'processing attempt count'),
   };
 }
 
 function mapAttempt(row: Record<string, unknown>): ReplayProcessingAttempt {
-  const analyzerVersion: AnalyzerVersion = {
-    id: safeInteger(row.id_analyzer_version, 'analyzer version id'),
-    createdAt: requiredTimestamp(row.analyzer_created_at, 'analyzer version created at'),
-    applicationVersion: String(row.application_version),
-    analyzerVersion: String(row.analyzer_version),
-    parserName: String(row.parser_name),
-    parserVersion: String(row.parser_version),
-    description: row.analyzer_description === null ? null : stringOrUndefined(row.analyzer_description),
-  };
-  const attempt: ReplayProcessingAttempt = {
-    id: safeInteger(row.id_attempt, 'attempt id'),
-    startedAt: requiredTimestamp(row.started_at, 'attempt started at'),
-    completedAt: nullableTimestamp(row.completed_at),
+  return {
+    id: safeInteger(row.id, 'attempt id'),
+    file_sha256: String(row.file_sha256).trim(),
+    application_id: String(row.application_id),
+    idempotency_key: String(row.idempotency_key),
+    request_sha256: String(row.request_sha256).trim(),
+    payload_sha256: row.payload_sha256 === null ? null : String(row.payload_sha256).trim(),
+    analyzer_version: nullableString(row.analyzer_version),
+    application_version: nullableString(row.application_version),
+    parser_name: nullableString(row.parser_name),
+    parser_version: nullableString(row.parser_version),
+    parse_mode: row.parse_mode === null
+      ? null : String(row.parse_mode) as ReplayProcessingAttempt.ParseModeEnum,
     status: String(row.status) as ReplayProcessingAttempt.StatusEnum,
-    idempotencyKey: String(row.idempotency_key),
-    errorMessage: row.error_message === null ? null : SAFE_FAILURE_MESSAGE,
-    analyzerVersion,
+    error_code: nullableString(row.error_code),
+    error_message: nullableString(row.error_message),
+    received_at: timestamp(row.received_at),
+    started_at: nullableTimestamp(row.started_at),
+    completed_at: nullableTimestamp(row.completed_at),
   };
-  return attempt;
 }
 
-function sameFileMetadata(row: Record<string, unknown>, input: ReplayFileRegistration): boolean {
-  if (row.file_name !== input.fileName) return false;
-  const existingSize = nullableInteger(row.file_size_bytes, 'file size');
-  const inputSize = input.fileSizeBytes ?? null;
-  if (existingSize !== inputSize) return false;
-  const existingCreated = nullableTimestamp(row.file_created_at);
-  const inputCreated = input.fileCreatedAt ?? null;
-  if (existingCreated === null || inputCreated === null) return existingCreated === inputCreated;
-  return Date.parse(existingCreated) === Date.parse(inputCreated);
+function pagination(page: number, pageSize: number, total: number) {
+  return {
+    page,
+    page_size: pageSize,
+    total,
+    total_pages: total === 0 ? 0 : Math.ceil(total / pageSize),
+  };
 }
 
-function attemptOutcomeForStatus(
-  status: ReplayProcessingAttempt.StatusEnum,
-  newlyCreated: boolean,
-): ReplayAttemptOutcomeKind {
-  if (newlyCreated) return 'created';
-  if (status === ReplayProcessingAttempt.StatusEnum.Processing) return 'processing';
-  if (status === ReplayProcessingAttempt.StatusEnum.Failed) return 'failed';
-  return 'replayed';
+function observationCount(data: NonNullable<ParserReplayData['observations']>): number {
+  return [
+    data.equippedItems, data.containerInteractions, data.droppedItems,
+    data.treasureEvents, data.prizeHandlerGrants,
+  ].reduce((total, items) => total + (items?.length ?? 0), 0);
 }
 
 function safeInteger(value: unknown, label: string): number {
   const converted = typeof value === 'number' ? value : Number(value);
-  if (!Number.isSafeInteger(converted)) {
+  if (!Number.isSafeInteger(converted) || converted < 0) {
     throw new RangeError(`${label} is outside the safe integer range.`);
   }
   return converted;
 }
 
-function assertInsertedRows(actual: number | null, expected: number, label: string): void {
-  if (actual !== expected) {
-    throw new Error(`Expected ${expected} ${label} row(s), but inserted ${actual ?? 0}.`);
-  }
-}
-
-function nullableInteger(value: unknown, label: string): number | null {
-  return value === null || value === undefined ? null : safeInteger(value, label);
-}
-
-function requiredTimestamp(value: unknown, label: string): string {
+function timestamp(value: unknown): string {
   const date = value instanceof Date ? value : new Date(String(value));
-  if (!Number.isFinite(date.getTime())) throw new TypeError(`Invalid ${label} timestamp.`);
+  if (!Number.isFinite(date.getTime())) throw new TypeError('Invalid database timestamp.');
   return date.toISOString();
 }
 
 function nullableTimestamp(value: unknown): string | null {
-  return value === null || value === undefined ? null : requiredTimestamp(value, 'nullable');
+  return value === null || value === undefined ? null : timestamp(value);
 }
 
-function stringOrUndefined(value: unknown): string | undefined {
-  return value === null || value === undefined ? undefined : String(value);
+function nullableString(value: unknown): string | null {
+  return value === null || value === undefined ? null : String(value);
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  return getErrorCode(error) === '23505';
+function digest(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }
 
-function getErrorCode(error: unknown): string | undefined {
-  return typeof error === 'object'
-    && error !== null
-    && 'code' in error
-    && typeof error.code === 'string'
-    ? error.code
-    : undefined;
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
-interface IngestionTrace {
-  start(stage: string): void;
-  finish(): void;
-  fail(error: unknown): void;
-}
-
-function createIngestionTrace(fileSha256: string, getAttemptId: () => number | undefined): IngestionTrace {
-  let stage: string | undefined;
-  const emit = (result: 'started' | 'success') => {
-    console.log(JSON.stringify({
-      event: 'replay_ingestion',
-      fileSha256,
-      attemptId: getAttemptId() ?? null,
-      stage,
-      result,
-    }));
-  };
-  const finish = () => {
-    if (stage !== undefined) emit('success');
-    stage = undefined;
-  };
-  return {
-    start(nextStage) {
-      finish();
-      stage = nextStage;
-      emit('started');
-    },
-    finish,
-    fail(error) {
-      logReplayError(stage ?? 'unknown', fileSha256, getAttemptId(), error);
-      stage = undefined;
-    },
-  };
-}
-
-async function rollbackQuietly(client: PoolClient, trace?: IngestionTrace): Promise<Error | undefined> {
+async function rollback(client: PoolClient): Promise<Error | undefined> {
   try {
     await client.query('ROLLBACK');
     return undefined;
   } catch (error) {
-    if (trace) trace.fail(error);
-    else logReplayError('transaction_rollback', undefined, undefined, error);
+    logReplayError('transaction_rollback', undefined, undefined, error);
     return error instanceof Error ? error : new Error('Transaction rollback failed.');
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 }
