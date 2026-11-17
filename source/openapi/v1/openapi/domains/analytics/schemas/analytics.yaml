@@ -1,0 +1,342 @@
+AnalyticsHome:
+  type: object
+  additionalProperties: false
+  required: [indicators, ranking, hall_of_fame, recent_activity]
+  properties:
+    indicators:
+      type: object
+      additionalProperties: false
+      required: [chests, players, treasures, tokens]
+      properties:
+        chests:
+          $ref: '#/AnalyticsHomeMetric'
+        players:
+          $ref: '#/AnalyticsHomeMetric'
+        treasures:
+          $ref: '#/AnalyticsHomeMetric'
+        tokens:
+          $ref: '#/AnalyticsHomeMetric'
+    ranking:
+      $ref: '#/AnalyticsHomeRanking'
+    hall_of_fame:
+      $ref: '#/AnalyticsHomeHallOfFame'
+    recent_activity:
+      type: array
+      items:
+        $ref: '#/AnalyticsHomeActivity'
+
+AnalyticsHomeMetric:
+  type: object
+  additionalProperties: false
+  required: [value, availability, metric, description]
+  properties:
+    value:
+      type: integer
+      format: int64
+      nullable: true
+      minimum: 0
+    availability:
+      type: string
+      enum: [available, unavailable]
+    metric:
+      type: string
+    description:
+      type: string
+    reason:
+      type: string
+      nullable: true
+
+AnalyticsHomeRanking:
+  type: object
+  additionalProperties: false
+  required: [availability, metric, description, items]
+  properties:
+    availability:
+      type: string
+      enum: [available, unavailable]
+    metric:
+      type: string
+      enum: [container_interactions]
+    description:
+      type: string
+    items:
+      type: array
+      items:
+        $ref: '#/AnalyticsHomeRankingItem'
+
+AnalyticsHomeRankingItem:
+  type: object
+  additionalProperties: false
+  required: [position, player_id, display_name, value]
+  properties:
+    position: {type: integer, minimum: 1}
+    player_id: {type: integer, format: int64}
+    display_name: {type: string, nullable: true}
+    value: {type: integer, format: int64, minimum: 0}
+
+AnalyticsHomeHallOfFame:
+  type: object
+  additionalProperties: false
+  required: [availability, metric, description, reason, items]
+  properties:
+    availability:
+      type: string
+      enum: [available, unavailable]
+    metric:
+      type: string
+      enum: [token_holders]
+    description: {type: string}
+    reason: {type: string}
+    items:
+      type: array
+      items:
+        $ref: '#/AnalyticsHomeRankingItem'
+
+AnalyticsHomeActivity:
+  type: object
+  additionalProperties: false
+  required: [id, event_type, player_id, player_name, match_id, observed_value, received_at, event_time_seconds, description]
+  properties:
+    id: {type: string}
+    event_type:
+      type: string
+      enum: [container_interaction, treasure_event, prize_handler_grant]
+    player_id: {type: integer, format: int64, nullable: true}
+    player_name: {type: string, nullable: true}
+    match_id: {type: integer, format: int64}
+    observed_value: {type: string, nullable: true}
+    received_at:
+      type: string
+      format: date-time
+      description: Receipt time of the processing attempt, not the event occurrence.
+    event_time_seconds:
+      type: number
+      format: double
+      nullable: true
+      description: Match-relative time reported by the parser.
+    description:
+      type: string
+
+AnalyticsOverview:
+  type: object
+  additionalProperties: false
+  required: [generated_at, metrics]
+  properties:
+    generated_at:
+      type: string
+      format: date-time
+    metrics:
+      type: array
+      items:
+        $ref: '#/AnalyticsOverviewMetric'
+    notes:
+      type: array
+      items: {type: string}
+
+AnalyticsOverviewMetric:
+  type: object
+  additionalProperties: false
+  required: [metric, availability]
+  properties:
+    metric:
+      type: string
+      enum:
+      - matches_recorded
+      - identified_players
+      - container_interactions_observed
+      - treasure_events_observed
+      - prize_handler_grants_observed
+      - confirmed_chest_opens
+      - tokens_found
+      - treasure_count_from_chest
+    availability:
+      type: string
+      enum: [available, unavailable]
+    value:
+      type: integer
+      format: int64
+      nullable: true
+      minimum: 0
+    reason:
+      type: string
+      nullable: true
+
+AnalyticsActivityItem:
+  type: object
+  additionalProperties: false
+  required: [id, source, match_id, received_at]
+  properties:
+    id:
+      type: integer
+      format: int64
+    source:
+      type: string
+      enum: [container_interaction, treasure_event, prize_handler_grant]
+    match_id:
+      type: integer
+      format: int64
+    player_id:
+      type: integer
+      format: int64
+      nullable: true
+    player_name:
+      type: string
+      nullable: true
+    event_time_seconds:
+      type: number
+      format: double
+      nullable: true
+    received_at:
+      type: string
+      format: date-time
+      description: Time the corresponding parser snapshot was received, not the event's wall-clock occurrence.
+    observed_value:
+      type: string
+      nullable: true
+      description: Source label, prize ID, or handler. It is not a classified reward.
+
+AnalyticsRankingItem:
+  type: object
+  additionalProperties: false
+  required: [rank, player_id, metric, value, sample_size]
+  properties:
+    rank: {type: integer, minimum: 1}
+    player_id: {type: integer, format: int64}
+    display_name: {type: string, nullable: true}
+    metric:
+      type: string
+      enum:
+      - matches_played
+      - wins
+      - kills
+      - team_kills
+      - average_placement
+      - container_interactions
+      - treasure_events
+      - prize_handler_grants
+    value: {type: number, format: double}
+    sample_size:
+      type: integer
+      format: int64
+      description: Number of observed matches or events used for the metric.
+
+PlayerAnalyticsSummary:
+  type: object
+  additionalProperties: false
+  required: [player_id, matches_played]
+  properties:
+    player_id: {type: integer, format: int64}
+    matches_played: {type: integer, format: int64}
+    wins:
+      type: integer
+      format: int64
+      nullable: true
+      description: Count of matches with an observed placement of 1.
+    kills:
+      type: integer
+      format: int64
+      nullable: true
+      description: Sum of participant kills; distinct from event rows.
+    team_kills:
+      type: integer
+      format: int64
+      nullable: true
+    average_placement:
+      type: number
+      format: double
+      nullable: true
+      description: Computed only over matches with an observed placement.
+    sample_start:
+      type: string
+      format: date-time
+      nullable: true
+    sample_end:
+      type: string
+      format: date-time
+      nullable: true
+
+PlayerAnalyticsHistoryItem:
+  type: object
+  additionalProperties: false
+  required: [match_id, match_player_id]
+  properties:
+    match_id: {type: integer, format: int64}
+    match_player_id: {type: integer, format: int64}
+    match_start_at:
+      type: string
+      format: date-time
+      nullable: true
+    playlist:
+      type: string
+      nullable: true
+    map_info:
+      type: string
+      nullable: true
+    placement:
+      type: integer
+      nullable: true
+    kills:
+      type: integer
+      nullable: true
+    team_kills:
+      type: integer
+      nullable: true
+
+PlayerComparison:
+  type: object
+  additionalProperties: false
+  required: [player_id, summary]
+  properties:
+    player_id: {type: integer, format: int64}
+    summary:
+      $ref: '#/PlayerAnalyticsSummary'
+
+ContainerAnalytics:
+  type: object
+  additionalProperties: false
+  required: [container_label, observed_interactions]
+  properties:
+    container_label: {type: string}
+    observed_interactions: {type: integer, format: int64}
+    identified_players: {type: integer, format: int64}
+    matches: {type: integer, format: int64}
+
+TreasureEventAnalytics:
+  type: object
+  additionalProperties: false
+  required: [prize_id, observed_events]
+  properties:
+    prize_id: {type: string}
+    observed_events: {type: integer, format: int64}
+    identified_players: {type: integer, format: int64}
+
+PrizeHandlerGrantAnalytics:
+  type: object
+  additionalProperties: false
+  required: [observed_grants]
+  properties:
+    handler: {type: string, nullable: true}
+    observed_grants: {type: integer, format: int64}
+    identified_players: {type: integer, format: int64}
+
+VehicleObservationAnalytics:
+  type: object
+  additionalProperties: false
+  required: [vehicle_path, observed_samples]
+  properties:
+    vehicle_path: {type: string, nullable: true}
+    observed_samples: {type: integer, format: int64}
+    identified_players: {type: integer, format: int64}
+    matches: {type: integer, format: int64}
+
+SafeZoneAnalytics:
+  type: object
+  additionalProperties: false
+  required: [source_index, matches_observed]
+  properties:
+    source_index: {type: integer, format: int32}
+    matches_observed: {type: integer, format: int64}
+    average_radius:
+      type: number
+      format: double
+      nullable: true

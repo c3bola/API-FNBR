@@ -1,0 +1,131 @@
+ReplayDiagnosticAttemptSummary:
+  type: object
+  required: [id, file_sha256, application_id, idempotency_key, status, received_at, worker_attempts]
+  properties:
+    id: {type: integer, format: int64}
+    file_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    payload_sha256: {type: string, nullable: true, pattern: '^[a-f0-9]{64}$'}
+    application_id: {type: string}
+    idempotency_key: {type: string}
+    status: {type: string, enum: [accepted, processing, succeeded, failed, skipped]}
+    error_code: {type: string, nullable: true}
+    error_message: {type: string, nullable: true}
+    received_at: {type: string, format: date-time}
+    started_at: {type: string, format: date-time, nullable: true}
+    completed_at: {type: string, format: date-time, nullable: true}
+    worker_attempts: {type: integer, minimum: 0}
+    integrity_result: {type: string, nullable: true}
+    duration_ms: {type: integer, nullable: true, minimum: 0}
+    container_metrics:
+      type: object
+      nullable: true
+      additionalProperties: true
+
+ReplayDiagnosticAttemptPage:
+  type: object
+  required: [success, data, pagination]
+  properties:
+    success: {type: boolean, enum: [true]}
+    data:
+      type: array
+      items:
+        $ref: '#/ReplayDiagnosticAttemptSummary'
+    pagination:
+      $ref: ./responses.yaml#/Pagination
+
+ReplayDiagnosticStage:
+  type: object
+  required: [id, worker_attempt, stage, result, metrics]
+  properties:
+    id: {type: integer, format: int64}
+    worker_attempt: {type: integer, minimum: 0}
+    stage:
+      type: string
+      enum: [HTTP_RECEIVED, PAYLOAD_PERSISTED, JOB_ENQUEUED, WORKER_CLAIMED, PARSER_STARTED, PARSER_COMPLETED, NORMALIZATION_STARTED, NORMALIZATION_COMPLETED, DATABASE_PERSISTED, PROCESSING_COMPLETED]
+    result: {type: string, enum: [started, succeeded, partial_success, failed, skipped]}
+    started_at: {type: string, format: date-time, nullable: true}
+    completed_at: {type: string, format: date-time, nullable: true}
+    duration_ms: {type: integer, nullable: true, minimum: 0}
+    metrics:
+      type: object
+      additionalProperties: true
+    error_code: {type: string, nullable: true}
+    error_message: {type: string, nullable: true}
+    error_detail: {type: string, nullable: true}
+
+ReplayDiagnosticAttemptDetail:
+  type: object
+  required: [success, data]
+  properties:
+    success: {type: boolean, enum: [true]}
+    data:
+      type: object
+      required: [attempt, identifiers, timeline]
+      properties:
+        attempt:
+          $ref: '#/ReplayDiagnosticAttemptSummary'
+        identifiers:
+          type: object
+          additionalProperties: true
+        timeline:
+          type: array
+          items:
+            $ref: '#/ReplayDiagnosticStage'
+
+ReplayDiagnosticsHealth:
+  type: object
+  required: [success, data]
+  properties:
+    success: {type: boolean, enum: [true]}
+    data:
+      type: object
+      required: [worker_running, queue, recent_errors]
+      properties:
+        worker_running: {type: boolean}
+        queue:
+          type: object
+          additionalProperties: true
+        recent_errors:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+ReplayDiagnosticsMetrics:
+  type: object
+  required: [success, data]
+  properties:
+    success: {type: boolean, enum: [true]}
+    data:
+      type: object
+      additionalProperties: true
+
+ReplayContainerDiagnostics:
+  type: object
+  required: [success, data]
+  properties:
+    success: {type: boolean, enum: [true]}
+    data:
+      type: object
+      required: [processing_attempt_id, file_sha256, database, samples, samples_truncated]
+      properties:
+        processing_attempt_id: {type: integer, format: int64}
+        file_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+        normalization:
+          type: object
+          nullable: true
+          additionalProperties: true
+        persistence:
+          type: object
+          nullable: true
+          additionalProperties: true
+        database:
+          type: object
+          additionalProperties: true
+        samples:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: true
+        samples_truncated: {type: boolean}

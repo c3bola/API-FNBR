@@ -1,0 +1,571 @@
+/analytics/home:
+  get:
+    summary: Returns the public home dashboard in one aggregated response.
+    description: >
+      Confirmed chest opens and token classifications are unavailable unless
+      supported by explicit parser evidence. Container interactions and raw
+      reward events are returned under their observed names and are not
+      reclassified.
+    operationId: getAnalyticsHome
+    tags: [Analytics]
+    parameters:
+    - in: query
+      name: limit
+      description: Maximum number of ranking and activity rows.
+      schema: {type: integer, minimum: 1, maximum: 100, default: 10}
+    responses:
+      '200':
+        description: Aggregated home-page metrics and observations.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayObject'
+              - type: object
+                properties:
+                  data:
+                    $ref: '../schemas/analytics.yaml#/AnalyticsHome'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/overview:
+  get:
+    summary: Returns dashboard aggregates that can be derived from recorded Replay observations.
+    description: >
+      This supports the home dashboard but does not relabel observed
+      interactions as confirmed chest openings, or prize IDs as tokens.
+      Unsupported visual metrics are returned with availability unavailable and
+      a reason instead of a fabricated number.
+    operationId: getAnalyticsOverview
+    tags: [Analytics]
+    parameters:
+    - in: query
+      name: from
+      description: Inclusive match start time in UTC.
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      description: Exclusive match start time in UTC; must be later than from.
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: parse_mode
+      schema: {type: string, enum: [EventsOnly, Minimal, Normal, Full]}
+    responses:
+      '200':
+        description: Supported counts and explicit availability for unsupported home-page measures.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayObject'
+              - type: object
+                properties:
+                  data:
+                    $ref: '../schemas/analytics.yaml#/AnalyticsOverview'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/rankings:
+  get:
+    summary: Ranks globally identified players by an observed match or event metric.
+    description: >
+      Player-level match metrics require an explicitly linked identity.
+      Unknown placements/kills are excluded from the relevant denominators;
+      event sources remain distinct.
+    operationId: getAnalyticsRankings
+    tags: [Analytics]
+    parameters:
+    - in: query
+      name: metric
+      required: true
+      schema:
+        type: string
+        enum: [matches_played, wins, kills, team_kills, average_placement, container_interactions, treasure_events, prize_handler_grants]
+    - in: query
+      name: from
+      description: Inclusive match start time in UTC.
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      description: Exclusive match start time in UTC.
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: parse_mode
+      schema: {type: string, enum: [EventsOnly, Minimal, Normal, Full]}
+    - in: query
+      name: min_matches
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    - in: query
+      name: sort_order
+      schema: {type: string, enum: [asc, desc], default: desc}
+    responses:
+      '200':
+        description: Ranked players with the sample size used for each value.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/AnalyticsRankingItem'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/activity:
+  get:
+    summary: Lists recently received parser observations.
+    description: >
+      Orders by the processing attempt's received_at, not by an invented
+      wall-clock event timestamp. Event time is returned as a match-relative
+      value when present.
+    operationId: getAnalyticsActivity
+    tags: [Analytics]
+    parameters:
+    - in: query
+      name: source
+      schema: {type: string, enum: [container_interaction, treasure_event, prize_handler_grant]}
+    - in: query
+      name: from
+      description: Inclusive match start time in UTC.
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      description: Exclusive match start time in UTC.
+      schema: {type: string, format: date-time}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Latest imported observations, including unresolved player references.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/AnalyticsActivityItem'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/players/{player_id}/summary:
+  get:
+    summary: Aggregates one globally identified player's observed match statistics.
+    operationId: getPlayerAnalyticsSummary
+    tags: [Analytics, Players]
+    parameters:
+    - in: path
+      name: player_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: parse_mode
+      schema: {type: string, enum: [EventsOnly, Minimal, Normal, Full]}
+    responses:
+      '200':
+        description: Computed summary; unavailable statistics remain null.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayObject'
+              - type: object
+                properties:
+                  data:
+                    $ref: '../schemas/analytics.yaml#/PlayerAnalyticsSummary'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/players/{player_id}/history:
+  get:
+    summary: Lists one player's per-match observations.
+    description: Returns one row per match, not a pre-aggregated period.
+    operationId: getPlayerAnalyticsHistory
+    tags: [Analytics, Players]
+    parameters:
+    - in: path
+      name: player_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    - in: query
+      name: sort_order
+      schema: {type: string, enum: [asc, desc], default: desc}
+    responses:
+      '200':
+        description: Player match history.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/PlayerAnalyticsHistoryItem'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/players/compare:
+  get:
+    summary: Compares two to five players over identical match filters.
+    operationId: comparePlayerAnalytics
+    tags: [Analytics, Players]
+    parameters:
+    - in: query
+      name: player_ids
+      required: true
+      style: form
+      explode: true
+      description: Repeat for 2 to 5 distinct global player IDs.
+      schema:
+        type: array
+        minItems: 2
+        maxItems: 5
+        uniqueItems: true
+        items: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: parse_mode
+      schema: {type: string, enum: [EventsOnly, Minimal, Normal, Full]}
+    responses:
+      '200':
+        description: One summary per requested player, in the order of player_ids.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '../schemas/analytics.yaml#/PlayerComparison'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        description: One or more player IDs were not found.
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/containers/summary:
+  get:
+    summary: Aggregates observed container interactions by their reported label.
+    description: Does not assert every interaction is an opened chest.
+    operationId: getContainerAnalytics
+    tags: [Analytics, Containers]
+    parameters:
+    - in: query
+      name: container_label
+      schema: {type: string}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Counts of labeled interaction observations and known participants.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/ContainerAnalytics'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/treasures/summary:
+  get:
+    summary: Aggregates emitted treasure events by their original prize ID.
+    description: A treasure event count is not a token count or a full loot table.
+    operationId: getTreasureEventAnalytics
+    tags: [Analytics, Rewards]
+    parameters:
+    - in: query
+      name: prize_id
+      schema: {type: string}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Counts of treasure events actually emitted by the parser.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/TreasureEventAnalytics'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/prize-handler-grants/summary:
+  get:
+    summary: Aggregates raw prize-handler grants by handler.
+    description: Element IDs are omitted because their serialized type is undocumented.
+    operationId: getPrizeHandlerGrantAnalytics
+    tags: [Analytics, Rewards]
+    parameters:
+    - in: query
+      name: handler
+      schema: {type: string}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Counts of observed grants, without reward classification.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/PrizeHandlerGrantAnalytics'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/vehicles/observations:
+  get:
+    summary: Aggregates movement samples containing observed vehicle references.
+    description: Counts replicated snapshots, not vehicle sessions, trips, or distance.
+    operationId: getVehicleObservationAnalytics
+    tags: [Analytics, Vehicles]
+    parameters:
+    - in: query
+      name: vehicle_path
+      schema: {type: string}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Counts of movement samples with a resolved vehicle path.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/VehicleObservationAnalytics'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/analytics/safe-zones/summary:
+  get:
+    summary: Aggregates recorded safe-zone center/radius observations.
+    description: Does not reconstruct zone phases, paths, or heatmaps.
+    operationId: getSafeZoneAnalytics
+    tags: [Analytics, Safe Zones]
+    parameters:
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: playlist
+      schema: {type: string}
+    - in: query
+      name: map_info
+      schema: {type: string}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Aggregates per observed safe-zone array index.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: '../../replay/schemas/responses.yaml#/ReplayPage'
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: '../schemas/analytics.yaml#/SafeZoneAnalytics'
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError

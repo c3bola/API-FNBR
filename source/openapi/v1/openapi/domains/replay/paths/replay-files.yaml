@@ -1,194 +1,227 @@
 /replay-files:
   get:
-    summary: Lists registered Replay files.
-    operationId: replayFilesGet
-    tags:
-    - Replay Files
+    summary: Lists known Replay file hashes and processing state.
+    operationId: listReplayFiles
+    tags: [Replay Files]
     security:
     - bearerAuth: []
     parameters:
     - in: query
-      name: sha256
-      schema:
-        type: string
-        pattern: '^[a-f0-9]{64}$'
-      description: Filters by the file's SHA-256 hash.
+      name: application_id
+      schema: {type: string}
     - in: query
-      name: matchId
-      schema:
-        type: integer
-        format: int64
-      description: Filters by the associated match.
+      name: status
+      schema: {type: string, enum: [unprocessed, accepted, processing, succeeded, failed, skipped]}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
     responses:
       '200':
-        description: Replay files matching the filters.
+        description: File identifiers and associated processing metadata; no file bytes are returned.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: ../schemas/replayFile.yaml#/ReplayFile
-      '401':
-        $ref: ../../../components/responses.yaml#/responses/Unauthorized
-      '400':
-        $ref: ../../../components/responses.yaml#/responses/BadRequest
-      '500':
-        $ref: ../../../components/responses.yaml#/responses/InternalServerError
-  post:
-    summary: Registers Replay file metadata by its SHA-256 hash.
-    description: Registers Replay file metadata idempotently; the database does not store Replay file contents.
-    operationId: replayFilesPost
-    tags:
-    - Replay Ingestion
-    security:
-    - bearerAuth: []
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: ../schemas/replayFile.yaml#/ReplayFileRegistration
-    responses:
-      '201':
-        description: Replay file metadata registered.
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/replayFile.yaml#/ReplayFile
-      '200':
-        description: Matching Replay file metadata was already registered.
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/replayFile.yaml#/ReplayFile
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/replayFile.yaml#/ReplayFile
       '400':
         $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
-      '409':
-        $ref: ../../../components/responses.yaml#/responses/Conflict
       '500':
         $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
 /replay-files/{sha256}:
   get:
-    summary: Gets Replay file metadata by its SHA-256 hash.
-    operationId: replayFilesSha256Get
-    tags:
-    - Replay Files
+    summary: Gets Replay file registration and upload metadata by SHA-256.
+    operationId: getReplayFile
+    tags: [Replay Files]
     security:
     - bearerAuth: []
     parameters:
     - in: path
       name: sha256
       required: true
-      schema:
-        type: string
-        pattern: '^[a-f0-9]{64}$'
+      schema: {type: string, pattern: '^[a-f0-9]{64}$'}
     responses:
       '200':
-        description: Replay file metadata.
+        description: File hash and application uploads, without replay contents.
         content:
           application/json:
             schema:
-              $ref: ../schemas/replayFile.yaml#/ReplayFile
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ../schemas/replayFile.yaml#/ReplayFile
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
         $ref: ../../../components/responses.yaml#/responses/NotFound
-      '400':
-        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '500':
         $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
 /replay-files/{sha256}/processing-attempts:
   get:
-    summary: Lists processing attempts for a Replay file.
-    operationId: replayFilesSha256ProcessingAttemptsGet
-    tags:
-    - Replay Files
+    summary: Lists processing history for a Replay file.
+    operationId: listReplayFileProcessingAttempts
+    tags: [Replay Files]
     security:
     - bearerAuth: []
     parameters:
     - in: path
       name: sha256
       required: true
-      schema:
-        type: string
-        pattern: '^[a-f0-9]{64}$'
+      schema: {type: string, pattern: '^[a-f0-9]{64}$'}
+    - in: query
+      name: status
+      schema: {type: string, enum: [accepted, processing, succeeded, failed, skipped]}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
     responses:
       '200':
-        description: Processing attempts in recorded history.
+        description: Attempts ordered by receipt time.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
         $ref: ../../../components/responses.yaml#/responses/NotFound
-      '400':
-        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '500':
         $ref: ../../../components/responses.yaml#/responses/InternalServerError
   post:
-    summary: Ingests the extracted data for a registered Replay file.
+    summary: Ingests the complete ChestCounter parser snapshot for a Replay file.
     description: >
-      Creates a processing attempt and atomically persists the match snapshot and
-      Replay-observed records. Reusing an idempotency key with the same payload
-      returns the original attempt; use a new key to explicitly reprocess.
-    operationId: replayFilesSha256ProcessingAttemptsPost
-    tags:
-    - Replay Ingestion
+      The path SHA-256 identifies the Replay file. After authentication and
+      envelope validation, the API transactionally stores the exact request
+      bytes and an accepted processing attempt before returning 202. A bounded
+      PostgreSQL-backed worker validates and normalizes the payload later.
+      Invalid or unknown data fields are recorded as inconsistencies; the raw
+      request remains available for diagnosis. Reusing an idempotency key with
+      the same canonical request digest returns its existing attempt; a different digest
+      conflicts. Use a new key to explicitly reprocess. Authenticate with the
+      same Bearer JWT used for other protected API endpoints.
+    operationId: ingestReplaySnapshot
+    tags: [Replay Ingestion]
     security:
     - bearerAuth: []
     parameters:
     - in: path
       name: sha256
       required: true
-      schema:
-        type: string
-        pattern: '^[a-f0-9]{64}$'
+      schema: {type: string, pattern: '^[a-f0-9]{64}$'}
     requestBody:
       required: true
       content:
         application/json:
           schema:
             $ref: ../schemas/ingestion.yaml#/ReplayIngestionRequest
+          example:
+            application_id: chestcounter
+            idempotency_key: parser-v3-match-125
+            analyzer_version:
+              application_version: '2.0'
+              analyzer_version: '2.1'
+              parser_name: replay-parser
+              parser_version: '3.0'
+              description: ChestCounter parser snapshot
+            data:
+              parseMode: Minimal
+              match:
+                replayTimestamp: '2026-01-01T12:00:00Z'
+                replayLengthInMilliseconds: 1200000
+                gameData:
+                  gameSessionId: session-125
+                  utcTimeStartedMatch: '2026-01-01T12:00:00Z'
+                  currentPlaylist: playlist_defaultsolo
+                  playersLeft: 2
+              players:
+              - id: 1
+                epicId: '0123456789abcdef0123456789abcdef'
+                playerName: ExamplePlayer
+                placement: 1
+                kills: 4
+              - id: 2
+                epicId: 'fedcba9876543210fedcba9876543210'
+                playerName: Opponent
+                placement: 2
+              teams:
+              - teamIndex: 1
+                playerIds: [1]
+                playerNames: [ExamplePlayer]
+                placement: 1
+                teamKills: 4
+              eventEliminations: []
+              killFeed: []
+              map:
+                battleBusFlightPaths: []
+                safeZones: []
+                llamas: []
+                supplyDrops: []
+                rebootVans: []
+              weapons: []
+              observations:
+                equippedItems: []
+                containerInteractions: []
+                droppedItems: []
+                treasureEvents: []
+                prizeHandlerGrants: []
     responses:
-      '201':
-        description: A new processing attempt completed successfully.
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
-      '200':
-        description: The idempotency key already has a completed attempt.
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
       '202':
-        description: The same idempotent request is already being processed.
+        description: The request is durably stored and awaiting asynchronous processing.
         content:
           application/json:
             schema:
-              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
-      '422':
-        description: The attempt was recorded as failed and its derived-data transaction was rolled back.
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '200':
+        description: The same canonical request digest already has a completed attempt; the response contains its current terminal state.
         content:
           application/json:
             schema:
-              $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
       '400':
         $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
-      '404':
-        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '413':
+        $ref: ../../../components/responses.yaml#/responses/PayloadTooLarge
       '409':
         $ref: ../../../components/responses.yaml#/responses/Conflict
+      '503':
+        $ref: ../../../components/responses.yaml#/responses/ServiceUnavailable
       '500':
         $ref: ../../../components/responses.yaml#/responses/InternalServerError

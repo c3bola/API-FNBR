@@ -1,5 +1,15 @@
 # Technical path aggregator used by the root OpenAPI document.
 paths:
+  /analytics/screens/home:
+    $ref: ./analytics/paths/screens.yaml#/~1analytics~1screens~1home
+  /analytics/screens/statistics:
+    $ref: ./analytics/paths/screens.yaml#/~1analytics~1screens~1statistics
+  /analytics/screens/ranking:
+    $ref: ./analytics/paths/screens.yaml#/~1analytics~1screens~1ranking
+  /analytics/screens/players:
+    $ref: ./analytics/paths/screens.yaml#/~1analytics~1screens~1players
+  /analytics/screens/search:
+    $ref: ./analytics/paths/screens.yaml#/~1analytics~1screens~1search
   /auth/telegram:
     $ref: ./auth/paths/authentication.yaml#/~1auth~1telegram
 
@@ -117,56 +127,128 @@ paths:
   /replay-files/{sha256}/processing-attempts:
     $ref: ./replay/paths/replay-files.yaml#/~1replay-files~1{sha256}~1processing-attempts
 
+  /admin/replays/health:
+    $ref: ./replay/paths/diagnostics.yaml#/~1admin~1replays~1health
+
+  /admin/replays/metrics:
+    $ref: ./replay/paths/diagnostics.yaml#/~1admin~1replays~1metrics
+
+  /admin/replays/attempts:
+    $ref: ./replay/paths/diagnostics.yaml#/~1admin~1replays~1attempts
+
+  /admin/replays/attempts/{id}:
+    $ref: ./replay/paths/diagnostics.yaml#/~1admin~1replays~1attempts~1{id}
+
+  /admin/replays/attempts/{id}/containers:
+    $ref: ./replay/paths/diagnostics.yaml#/~1admin~1replays~1attempts~1{id}~1containers
+
   /matches:
     $ref: ./replay/paths/matches.yaml#/~1matches
 
-  /matches/{matchId}:
-    $ref: ./replay/paths/matches.yaml#/~1matches~1{matchId}
+  /matches/{match_id}:
+    $ref: ./replay/paths/matches.yaml#/~1matches~1{match_id}
 
-  /matches/{matchId}/stats:
-    $ref: ./replay/paths/matches.yaml#/~1matches~1{matchId}~1stats
+  /matches/{match_id}/stats:
+    $ref: ./replay/paths/matches.yaml#/~1matches~1{match_id}~1stats
 
-  /matches/{matchId}/players:
-    $ref: ./replay/paths/matches.yaml#/~1matches~1{matchId}~1players
+  /matches/{match_id}/players:
+    $ref: ./replay/paths/matches.yaml#/~1matches~1{match_id}~1players
 
-  /matches/{matchId}/players/{matchPlayerId}:
-    $ref: ./replay/paths/matches.yaml#/~1matches~1{matchId}~1players~1{matchPlayerId}
+  /matches/{match_id}/players/{match_player_id}:
+    $ref: ./replay/paths/matches.yaml#/~1matches~1{match_id}~1players~1{match_player_id}
+
+  /matches/{match_id}/teams:
+    $ref: ./replay/paths/matches.yaml#/~1matches~1{match_id}~1teams
 
   /players:
     $ref: ./replay/paths/players.yaml#/~1players
 
-  /players/{playerId}:
-    $ref: ./replay/paths/players.yaml#/~1players~1{playerId}
+  /players/{player_id}:
+    $ref: ./replay/paths/players.yaml#/~1players~1{player_id}
 
-  /players/{playerId}/matches:
-    $ref: ./replay/paths/players.yaml#/~1players~1{playerId}~1matches
+  /players/{player_id}/matches:
+    $ref: ./replay/paths/players.yaml#/~1players~1{player_id}~1matches
 
-  /players/{playerId}/stats:
-    $ref: ./replay/paths/players.yaml#/~1players~1{playerId}~1stats
+  /players/{player_id}/stats:
+    $ref: ./replay/paths/players.yaml#/~1players~1{player_id}~1stats
 
-  /matches/{matchId}/containers:
-    $ref: ./replay/paths/containers.yaml#/~1matches~1{matchId}~1containers
+  /matches/{match_id}/event-eliminations:
+    $ref: ./replay/paths/eliminations.yaml#/~1matches~1{match_id}~1event-eliminations
 
-  /matches/{matchId}/container-interactions:
-    $ref: ./replay/paths/containers.yaml#/~1matches~1{matchId}~1container-interactions
+  /matches/{match_id}/kill-feed:
+    $ref: ./replay/paths/eliminations.yaml#/~1matches~1{match_id}~1kill-feed
 
-  /matches/{matchId}/rewards:
-    $ref: ./replay/paths/rewards.yaml#/~1matches~1{matchId}~1rewards
+  /matches/{match_id}/players/{match_player_id}/stats:
+    $ref: ./replay/paths/players.yaml#/~1matches~1{match_id}~1players~1{match_player_id}~1stats
 
-  /reward-types:
-    $ref: ./replay/paths/rewards.yaml#/~1reward-types
+  /matches/{match_id}/map:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1map
 
-  /vehicles:
-    $ref: ./replay/paths/vehicles.yaml#/~1vehicles
+  /matches/{match_id}/map/poi-tags:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1map~1poi-tags
 
-  /matches/{matchId}/players/{matchPlayerId}/vehicle-usages:
-    $ref: ./replay/paths/vehicles.yaml#/~1matches~1{matchId}~1players~1{matchPlayerId}~1vehicle-usages
+  /matches/{match_id}/map/safe-zones:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1map~1safe-zones
 
-  /pois:
-    $ref: ./replay/paths/pois.yaml#/~1pois
+  /matches/{match_id}/game-state-observations:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1game-state-observations
 
-  /matches/{matchId}/players/{matchPlayerId}/poi-visits:
-    $ref: ./replay/paths/pois.yaml#/~1matches~1{matchId}~1players~1{matchPlayerId}~1poi-visits
+  /matches/{match_id}/players/{match_player_id}/movement:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1players~1{match_player_id}~1movement
 
-  /matches/{matchId}/safe-zone-phases:
-    $ref: ./replay/paths/safe-zones.yaml#/~1matches~1{matchId}~1safe-zone-phases
+  /matches/{match_id}/vehicle-observations:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1vehicle-observations
+
+  /matches/{match_id}/weapons:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1weapons
+
+  /matches/{match_id}/equipped-items:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1equipped-items
+
+  /matches/{match_id}/container-interactions:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1container-interactions
+
+  /matches/{match_id}/dropped-items:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1dropped-items
+
+  /matches/{match_id}/treasure-events:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1treasure-events
+
+  /matches/{match_id}/prize-handler-grants:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1prize-handler-grants
+
+  /matches/{match_id}/processing-attempts:
+    $ref: ./replay/paths/observations.yaml#/~1matches~1{match_id}~1processing-attempts
+
+  /analytics/overview:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1overview
+
+  /analytics/rankings:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1rankings
+
+  /analytics/activity:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1activity
+
+  /analytics/players/{player_id}/summary:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1players~1{player_id}~1summary
+
+  /analytics/players/{player_id}/history:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1players~1{player_id}~1history
+
+  /analytics/players/compare:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1players~1compare
+
+  /analytics/containers/summary:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1containers~1summary
+
+  /analytics/treasures/summary:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1treasures~1summary
+
+  /analytics/prize-handler-grants/summary:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1prize-handler-grants~1summary
+
+  /analytics/vehicles/observations:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1vehicles~1observations
+
+  /analytics/safe-zones/summary:
+    $ref: ./analytics/paths/analytics.yaml#/~1analytics~1safe-zones~1summary

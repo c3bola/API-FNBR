@@ -1,0 +1,72 @@
+paths:
+  /analytics/screens/home:
+    $ref: ./paths/screens.yaml#/~1analytics~1screens~1home
+  /analytics/screens/statistics:
+    $ref: ./paths/screens.yaml#/~1analytics~1screens~1statistics
+  /analytics/screens/ranking:
+    $ref: ./paths/screens.yaml#/~1analytics~1screens~1ranking
+  /analytics/screens/players:
+    $ref: ./paths/screens.yaml#/~1analytics~1screens~1players
+  /analytics/screens/search:
+    $ref: ./paths/screens.yaml#/~1analytics~1screens~1search
+  /analytics/home:
+    $ref: ./paths/analytics.yaml#/~1analytics~1home
+  /analytics/overview:
+    $ref: ./paths/analytics.yaml#/~1analytics~1overview
+  /analytics/rankings:
+    $ref: ./paths/analytics.yaml#/~1analytics~1rankings
+  /analytics/activity:
+    $ref: ./paths/analytics.yaml#/~1analytics~1activity
+  /analytics/players/{player_id}/summary:
+    $ref: ./paths/analytics.yaml#/~1analytics~1players~1{player_id}~1summary
+  /analytics/players/{player_id}/history:
+    $ref: ./paths/analytics.yaml#/~1analytics~1players~1{player_id}~1history
+  /analytics/players/compare:
+    $ref: ./paths/analytics.yaml#/~1analytics~1players~1compare
+  /analytics/containers/summary:
+    $ref: ./paths/analytics.yaml#/~1analytics~1containers~1summary
+  /analytics/treasures/summary:
+    $ref: ./paths/analytics.yaml#/~1analytics~1treasures~1summary
+  /analytics/prize-handler-grants/summary:
+    $ref: ./paths/analytics.yaml#/~1analytics~1prize-handler-grants~1summary
+  /analytics/vehicles/observations:
+    $ref: ./paths/analytics.yaml#/~1analytics~1vehicles~1observations
+  /analytics/safe-zones/summary:
+    $ref: ./paths/analytics.yaml#/~1analytics~1safe-zones~1summary
+schemas:
+  AnalyticsHome:
+    $ref: ./schemas/analytics.yaml#/AnalyticsHome
+  AnalyticsHomeMetric:
+    $ref: ./schemas/analytics.yaml#/AnalyticsHomeMetric
+  AnalyticsHomeRanking:
+    $ref: ./schemas/analytics.yaml#/AnalyticsHomeRanking
+  AnalyticsHomeRankingItem:
+    $ref: ./schemas/analytics.yaml#/AnalyticsHomeRankingItem
+  AnalyticsHomeHallOfFame:
+    $ref: ./schemas/analytics.yaml#/AnalyticsHomeHallOfFame
+  AnalyticsHomeActivity:
+    $ref: ./schemas/analytics.yaml#/AnalyticsHomeActivity
+  AnalyticsOverview:
+    $ref: ./schemas/analytics.yaml#/AnalyticsOverview
+  AnalyticsOverviewMetric:
+    $ref: ./schemas/analytics.yaml#/AnalyticsOverviewMetric
+  AnalyticsActivityItem:
+    $ref: ./schemas/analytics.yaml#/AnalyticsActivityItem
+  AnalyticsRankingItem:
+    $ref: ./schemas/analytics.yaml#/AnalyticsRankingItem
+  PlayerAnalyticsSummary:
+    $ref: ./schemas/analytics.yaml#/PlayerAnalyticsSummary
+  PlayerAnalyticsHistoryItem:
+    $ref: ./schemas/analytics.yaml#/PlayerAnalyticsHistoryItem
+  PlayerComparison:
+    $ref: ./schemas/analytics.yaml#/PlayerComparison
+  ContainerAnalytics:
+    $ref: ./schemas/analytics.yaml#/ContainerAnalytics
+  TreasureEventAnalytics:
+    $ref: ./schemas/analytics.yaml#/TreasureEventAnalytics
+  PrizeHandlerGrantAnalytics:
+    $ref: ./schemas/analytics.yaml#/PrizeHandlerGrantAnalytics
+  VehicleObservationAnalytics:
+    $ref: ./schemas/analytics.yaml#/VehicleObservationAnalytics
+  SafeZoneAnalytics:
+    $ref: ./schemas/analytics.yaml#/SafeZoneAnalytics

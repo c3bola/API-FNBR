@@ -1,15 +1,12 @@
 ReplayError:
   type: object
-  additionalProperties: false
   required:
-  - statusCode
+  - code
   - message
-  - error
   properties:
-    statusCode:
-      type: integer
-      format: int32
+    code:
+      type: string
+      example: INVALID_QUERY
     message:
       type: string
-    error:
-      type: string
+      example: The query parameters are invalid.

@@ -1,0 +1,25 @@
+MatchTeam:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, team_index, members]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    team_index: {type: integer, format: int32}
+    party_owner_replay_player_id: {type: integer, format: int32, nullable: true}
+    placement: {type: integer, format: int32, nullable: true}
+    team_kills: {type: integer, format: int64, nullable: true}
+    members:
+      type: array
+      items:
+        $ref: '#/MatchTeamMember'
+
+MatchTeamMember:
+  type: object
+  additionalProperties: false
+  required: [member_index]
+  properties:
+    member_index: {type: integer, format: int32, minimum: 0}
+    replay_player_id: {type: integer, format: int32, nullable: true}
+    match_player_id: {type: integer, format: int64, nullable: true}
+    player_name: {type: string, nullable: true}

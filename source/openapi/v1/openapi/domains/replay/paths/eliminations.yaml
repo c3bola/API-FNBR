@@ -1,0 +1,106 @@
+/matches/{match_id}/event-eliminations:
+  get:
+    summary: Lists custom eventEliminations for a match.
+    description: This source is not merged with replicated killFeed entries.
+    operationId: listMatchEventEliminations
+    tags: [Eliminations, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      description: Inclusive source event start time.
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      description: Exclusive source event start time.
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: eliminated_id
+      schema: {type: string}
+    - in: query
+      name: eliminator_id
+      schema: {type: string}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Custom elimination events ordered by source event time and ID.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/elimination.yaml#/EventElimination
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/kill-feed:
+  get:
+    summary: Lists replicated killFeed observations for a match.
+    description: This replicated source remains separate from custom eventEliminations.
+    operationId: listMatchKillFeed
+    tags: [Eliminations, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      description: Inclusive replicated world time.
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      description: Exclusive replicated world time.
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: player_replay_id
+      schema: {type: integer, format: int32}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Replicated kill-feed entries ordered by world time and ID.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/elimination.yaml#/KillFeedEntry
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError

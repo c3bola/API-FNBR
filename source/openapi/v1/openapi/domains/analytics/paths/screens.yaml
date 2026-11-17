@@ -1,0 +1,113 @@
+/analytics/screens/home:
+  get:
+    operationId: getAnalyticsScreenHome
+    summary: Return available data for the home screen.
+    tags: [Analytics]
+    security: []
+    parameters:
+      - in: query
+        name: limit
+        schema: {type: integer, minimum: 1, maximum: 100, default: 5}
+    responses:
+      '200':
+        description: Observed counts, ranking and imported activity.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [success, data]
+              properties:
+                success: {type: boolean}
+                data: {$ref: '../schemas/screens.yaml#/ScreenHome'}
+      '400': {$ref: ../../../components/responses.yaml#/responses/BadRequest}
+      '500': {$ref: ../../../components/responses.yaml#/responses/InternalServerError}
+
+/analytics/screens/statistics:
+  get:
+    operationId: getAnalyticsScreenStatistics
+    summary: Return available data for the statistics screen.
+    tags: [Analytics]
+    security: []
+    responses:
+      '200':
+        description: Observed totals and match counts by reported playlist.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [success, data]
+              properties:
+                success: {type: boolean}
+                data: {$ref: '../schemas/screens.yaml#/ScreenStatistics'}
+      '500': {$ref: ../../../components/responses.yaml#/responses/InternalServerError}
+
+/analytics/screens/ranking:
+  get:
+    operationId: getAnalyticsScreenRanking
+    summary: Return the ranking screen using observed metrics.
+    tags: [Analytics]
+    security: []
+    parameters: &playerParameters
+      - in: query
+        name: search
+        schema: {type: string, maxLength: 200}
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum: [matches_played, container_interactions_observed, treasure_events_observed]
+          default: matches_played
+      - in: query
+        name: page
+        schema: {type: integer, minimum: 1, maximum: 1000000, default: 1}
+      - in: query
+        name: page_size
+        schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses: &playerResponses
+      '200':
+        description: Identified players with observed metrics.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [success, data]
+              properties:
+                success: {type: boolean}
+                data: {$ref: '../schemas/screens.yaml#/ScreenPlayers'}
+      '400': {$ref: ../../../components/responses.yaml#/responses/BadRequest}
+      '500': {$ref: ../../../components/responses.yaml#/responses/InternalServerError}
+
+/analytics/screens/players:
+  get:
+    operationId: getAnalyticsScreenPlayers
+    summary: Return the players screen.
+    tags: [Analytics]
+    security: []
+    parameters: *playerParameters
+    responses: *playerResponses
+
+/analytics/screens/search:
+  get:
+    operationId: getAnalyticsScreenSearch
+    summary: Return the player search screen.
+    tags: [Analytics]
+    security: []
+    parameters:
+      - in: query
+        name: search
+        required: true
+        description: Literal name, Epic ID or platform network ID substring.
+        schema: {type: string, minLength: 1, maxLength: 200}
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum: [matches_played, container_interactions_observed, treasure_events_observed]
+          default: matches_played
+      - in: query
+        name: page
+        schema: {type: integer, minimum: 1, maximum: 1000000, default: 1}
+      - in: query
+        name: page_size
+        schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses: *playerResponses

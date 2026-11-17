@@ -1,0 +1,158 @@
+MapSnapshot:
+  type: object
+  additionalProperties: false
+  required: [match_id]
+  properties:
+    match_id: {type: integer, format: int64}
+    world_grid_start:
+      $ref: '#/Vector2'
+    world_grid_end:
+      $ref: '#/Vector2'
+    world_grid_spacing:
+      $ref: '#/Vector2'
+    world_grid_total_size:
+      $ref: '#/Vector2'
+    grid_count_x: {type: integer, format: int32, nullable: true}
+    grid_count_y: {type: integer, format: int32, nullable: true}
+    poi_tag_container_table_size: {type: integer, format: int32, nullable: true}
+    poi_tags:
+      type: array
+      description: Ordered tags as observed; not resolved to named POIs.
+      items: {type: string}
+    battle_bus_flight_paths:
+      type: array
+      items:
+        $ref: '#/BattleBusFlightPath'
+    safe_zones:
+      type: array
+      items:
+        $ref: '#/SafeZoneObservation'
+    llamas:
+      type: array
+      items:
+        $ref: '#/LlamaObservation'
+    supply_drops:
+      type: array
+      items:
+        $ref: '#/SupplyDropObservation'
+    reboot_vans:
+      type: array
+      items:
+        $ref: '#/RebootVanObservation'
+
+Vector2:
+  type: object
+  additionalProperties: false
+  properties:
+    x: {type: number, format: double, nullable: true}
+    y: {type: number, format: double, nullable: true}
+
+Vector3:
+  type: object
+  additionalProperties: false
+  properties:
+    x: {type: number, format: double, nullable: true}
+    y: {type: number, format: double, nullable: true}
+    z: {type: number, format: double, nullable: true}
+
+Rotator:
+  type: object
+  additionalProperties: false
+  properties:
+    pitch: {type: number, format: double, nullable: true}
+    yaw: {type: number, format: double, nullable: true}
+    roll: {type: number, format: double, nullable: true}
+
+BattleBusFlightPath:
+  type: object
+  additionalProperties: false
+  required: [path_index]
+  properties:
+    path_index: {type: integer, format: int32}
+    start:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    rotation:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Rotator'
+    velocity:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    flight_time: {type: number, format: double, nullable: true}
+    drop_time: {type: number, format: double, nullable: true}
+    skin: {type: string, nullable: true}
+
+SafeZoneObservation:
+  type: object
+  additionalProperties: false
+  required: [source_index]
+  properties:
+    source_index: {type: integer, format: int32}
+    center:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    radius: {type: number, format: double, nullable: true}
+
+LlamaObservation:
+  type: object
+  additionalProperties: false
+  required: [id]
+  properties:
+    id: {type: integer, format: int64}
+    position:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    destination:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    looted: {type: boolean, nullable: true}
+
+SupplyDropObservation:
+  type: object
+  additionalProperties: false
+  required: [id]
+  properties:
+    id: {type: integer, format: int64}
+    landing_position:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    fall_position:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    balloon_position:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    looted: {type: boolean, nullable: true}
+
+RebootVanObservation:
+  type: object
+  additionalProperties: false
+  required: [id]
+  properties:
+    id: {type: integer, format: int64}
+    actor_guid: {type: string, nullable: true}
+    actor_handle: {type: integer, format: int64, nullable: true, minimum: 0}
+    location:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: '#/Vector3'
+    state: {type: integer, format: int32, nullable: true}

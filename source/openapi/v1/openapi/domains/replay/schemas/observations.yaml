@@ -1,0 +1,209 @@
+MovementSample:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, match_player_id]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    match_player_id: {type: integer, format: int64}
+    pawn_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    replicated_world_time_seconds: {type: number, format: float, nullable: true}
+    replicated_world_time_seconds_double: {type: number, format: double, nullable: true}
+    last_update_time: {type: number, format: float, nullable: true}
+    location:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    rotation:
+      type: object
+      additionalProperties: false
+      properties:
+        pitch: {type: number, format: double, nullable: true}
+        yaw: {type: number, format: double, nullable: true}
+        roll: {type: number, format: double, nullable: true}
+    linear_velocity:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    angular_velocity:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    acceleration:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    is_simulated_physics_sleep: {type: boolean, nullable: true}
+    is_replicating_physics: {type: boolean, nullable: true}
+    is_replicating_acceleration: {type: boolean, nullable: true}
+    server_frame: {type: integer, format: int64, nullable: true}
+    b_rep_movement_handle: {type: integer, format: int64, nullable: true}
+    location_quantization_level: {type: integer, format: int32, nullable: true}
+    velocity_quantization_level: {type: integer, format: int32, nullable: true}
+    rotation_quantization_level: {type: integer, format: int32, nullable: true}
+    replicated_movement_mode: {type: integer, format: int32, nullable: true}
+    current_movement_style: {type: integer, format: int32, nullable: true}
+    is_sprinting: {type: boolean, nullable: true}
+    is_jumping: {type: boolean, nullable: true}
+    is_crouched: {type: boolean, nullable: true}
+    is_slope_sliding: {type: boolean, nullable: true}
+    is_ziplining: {type: boolean, nullable: true}
+    is_targeting: {type: boolean, nullable: true}
+    is_dbno: {type: boolean, nullable: true}
+    is_honking: {type: boolean, nullable: true}
+    is_in_any_storm: {type: boolean, nullable: true}
+    is_waiting_for_emote_interaction: {type: boolean, nullable: true}
+    is_playing_emote: {type: boolean, nullable: true}
+    is_skydiving: {type: boolean, nullable: true}
+    is_skydiving_from_launch_pad: {type: boolean, nullable: true}
+    is_skydiving_from_bus: {type: boolean, nullable: true}
+    is_parachute_open: {type: boolean, nullable: true}
+    is_parachute_forced_open: {type: boolean, nullable: true}
+    is_in_water_volume: {type: boolean, nullable: true}
+    vehicle_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    vehicle_path: {type: string, nullable: true}
+    seat_index: {type: integer, format: int32, nullable: true, minimum: 0, maximum: 255}
+
+MovementSamplePage:
+  type: object
+  additionalProperties: false
+  required: [success, data, has_more]
+  properties:
+    success: {type: boolean, enum: [true]}
+    data:
+      type: array
+      items:
+        $ref: '#/MovementSample'
+    next_cursor: {type: string, nullable: true}
+    has_more: {type: boolean}
+
+WeaponObservation:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, actor_id]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    actor_id: {type: integer, format: int64, minimum: 0}
+    weapon_name: {type: string, nullable: true}
+    ammo_count: {type: integer, format: int32, nullable: true}
+    weapon_level: {type: integer, format: int32, nullable: true}
+    last_fire_time_verified: {type: number, format: float, nullable: true}
+    is_equipping_weapon: {type: boolean, nullable: true}
+    is_reloading_weapon: {type: boolean, nullable: true}
+    value_a: {type: integer, format: int64, nullable: true}
+    value_b: {type: integer, format: int64, nullable: true}
+    value_c: {type: integer, format: int64, nullable: true}
+    value_d: {type: integer, format: int64, nullable: true}
+
+EquippedItemObservation:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, observation_index]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    observation_index: {type: integer, format: int32, minimum: 0}
+    time_seconds: {type: number, format: double, nullable: true}
+    item_name: {type: string, nullable: true}
+    pawn_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    player_replay_id: {type: integer, format: int32, nullable: true}
+
+ContainerInteraction:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, processing_attempt_id, source_actor_key, interaction_kind]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    processing_attempt_id: {type: integer, format: int64}
+    source_actor_key: {type: string, nullable: true}
+    container_label: {type: string, nullable: true}
+    interaction_kind:
+      type: string
+      enum: [container, loot_cannon]
+      nullable: true
+      description: Derived from the observed interaction source; null when the source cannot be classified.
+    time_seconds: {type: number, format: double, nullable: true}
+    searching_pawn_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    searching_player_state_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    searching_player_replay_id: {type: integer, format: int32, nullable: true}
+    already_searched: {type: boolean, nullable: true}
+    search_animation_count: {type: integer, format: int64, nullable: true}
+    destroyed: {type: boolean, nullable: true}
+
+DroppedItemObservation:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, observation_index]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    observation_index: {type: integer, format: int32, minimum: 0}
+    time_seconds: {type: number, format: double, nullable: true}
+    item: {type: string, nullable: true}
+    item_definition_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    item_definition_path: {type: string, nullable: true}
+    item_count: {type: integer, format: int32, nullable: true}
+    durability: {type: number, format: double, nullable: true}
+    level: {type: integer, format: int32, nullable: true}
+    loaded_ammo: {type: integer, format: int32, nullable: true}
+    order_index: {type: integer, format: int32, nullable: true}
+    item_owner: {type: integer, format: int64, nullable: true, minimum: 0}
+    pawn_who_dropped_pickup: {type: integer, format: int64, nullable: true, minimum: 0}
+    owner: {type: integer, format: int64, nullable: true, minimum: 0}
+    dropped_by_player_replay_id: {type: integer, format: int32, nullable: true}
+    replicated_location:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    loot_initial_position:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    loot_final_position:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    final_toss_rest_location:
+      type: object
+      nullable: true
+      allOf:
+        - $ref: ./matchPlayer.yaml#/Vector3
+    fly_time: {type: number, format: double, nullable: true}
+    toss_state: {type: integer, format: int32, nullable: true}
+    picked_up: {type: boolean, nullable: true}
+
+TreasureEvent:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, observation_index]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    observation_index: {type: integer, format: int32, minimum: 0}
+    time_seconds: {type: number, format: double, nullable: true}
+    prize_id: {type: string, nullable: true}
+    pawn_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    player_replay_id: {type: integer, format: int32, nullable: true}
+    source_container: {type: string, nullable: true}
+
+PrizeHandlerGrant:
+  type: object
+  additionalProperties: false
+  required: [id, match_id, observation_index]
+  properties:
+    id: {type: integer, format: int64}
+    match_id: {type: integer, format: int64}
+    observation_index: {type: integer, format: int32, minimum: 0}
+    handler: {type: string, nullable: true}
+    time_seconds: {type: number, format: double, nullable: true}
+    player_state_actor_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    player_replay_id: {type: integer, format: int32, nullable: true}

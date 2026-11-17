@@ -1,142 +1,66 @@
 Match:
   type: object
-  required:
-  - id
-  - createdAt
-  - updatedAt
+  additionalProperties: false
+  required: [id, identity_key, created_at, updated_at]
   properties:
-    id:
-      type: integer
-      format: int64
-    matchStartAt:
+    id: {type: integer, format: int64}
+    identity_key:
       type: string
-      format: date-time
+      description: Derived as session:<gameSessionId> or, when absent, replay:<file_sha256>.
+    game_session_id: {type: string, nullable: true}
+    replay_timestamp: {type: string, format: date-time, nullable: true}
+    replay_length_milliseconds: {type: integer, format: int32, nullable: true, minimum: 0}
+    replay_branch: {type: string, nullable: true}
+    utc_time_started_match: {type: string, format: date-time, nullable: true}
+    match_end_time: {type: number, format: double, nullable: true}
+    current_playlist: {type: string, nullable: true}
+    map_info: {type: string, nullable: true}
+    additional_playlist_levels:
+      type: array
       nullable: true
-    matchEndAt:
-      type: string
-      format: date-time
+      items: {type: string}
+    active_gameplay_modifiers:
+      type: array
       nullable: true
-    durationSeconds:
-      type: number
-      format: double
+      items: {type: string}
+    recorder_id: {type: integer, format: int64, nullable: true, minimum: 0}
+    team_count: {type: integer, format: int32, nullable: true, minimum: 0}
+    team_size: {type: integer, format: int32, nullable: true, minimum: 0}
+    player_bots_left: {type: integer, format: int32, nullable: true, minimum: 0}
+    players_left: {type: integer, format: int32, nullable: true, minimum: 0}
+    teams_left: {type: integer, format: int32, nullable: true, minimum: 0}
+    elapsed_time: {type: integer, format: int32, nullable: true}
+    game_phase: {type: integer, format: int32, nullable: true}
+    safe_zone_phase: {type: integer, format: int32, nullable: true, minimum: 0}
+    has_begun_play: {type: boolean, nullable: true}
+    total_player_structures: {type: integer, format: int64, nullable: true}
+    winning_team: {type: integer, format: int64, nullable: true, minimum: 0}
+    winning_player_ids:
+      type: array
       nullable: true
-      minimum: 0
-    createdAt:
-      type: string
-      format: date-time
-    updatedAt:
-      type: string
-      format: date-time
-    totalPlayers:
-      type: integer
-      format: int32
-      nullable: true
-      minimum: 0
-    totalTeams:
-      type: integer
-      format: int32
-      nullable: true
-      minimum: 0
-    chapterNumber:
-      type: integer
-      format: int32
-      nullable: true
-    isCustomMatch:
-      type: boolean
-      nullable: true
-    sessionId:
-      type: string
-      nullable: true
-      maxLength: 150
-    playlist:
-      type: string
-      nullable: true
-      maxLength: 150
-    gameMode:
-      type: string
-      nullable: true
-      maxLength: 100
-    mapCode:
-      type: string
-      nullable: true
-      maxLength: 100
-    mapName:
-      type: string
-      nullable: true
-      maxLength: 150
-    seasonCode:
-      type: string
-      nullable: true
-      maxLength: 80
-    gameVersion:
-      type: string
-      nullable: true
-      maxLength: 80
+      items: {type: integer, format: int32}
+    aircraft_start_time: {type: number, format: double, nullable: true}
+    safe_zones_start_time: {type: number, format: double, nullable: true}
+    team_stats_position: {type: integer, format: int64, nullable: true, minimum: 0}
+    team_stats_total_players: {type: integer, format: int64, nullable: true, minimum: 0}
+    created_at: {type: string, format: date-time}
+    updated_at: {type: string, format: date-time}
 
 MatchStats:
   type: object
-  required:
-  - id
-  - matchId
+  additionalProperties: false
+  required: [match_id]
   properties:
-    id:
-      type: integer
-      format: int64
-    matchId:
-      type: integer
-      format: int64
-    matchPlayerId:
-      type: integer
-      format: int64
-      nullable: true
-      description: Optional participant reference stored with the match-level payload.
-    totalTraveled:
-      type: number
-      format: double
-      nullable: true
-      minimum: 0
-    accuracy:
-      type: number
-      format: double
-      nullable: true
-      minimum: 0
-    unknown:
-      type: integer
-      format: int32
-      nullable: true
-    assists:
-      type: integer
-      format: int32
-      nullable: true
-    eliminations:
-      type: integer
-      format: int32
-      nullable: true
-    weaponDamage:
-      type: integer
-      format: int32
-      nullable: true
-    otherDamage:
-      type: integer
-      format: int32
-      nullable: true
-    revives:
-      type: integer
-      format: int32
-      nullable: true
-    damageTaken:
-      type: integer
-      format: int32
-      nullable: true
-    damageToStructures:
-      type: integer
-      format: int32
-      nullable: true
-    materialsGathered:
-      type: integer
-      format: int32
-      nullable: true
-    materialsUsed:
-      type: integer
-      format: int32
-      nullable: true
+    match_id: {type: integer, format: int64}
+    total_traveled: {type: number, format: double, nullable: true}
+    accuracy: {type: number, format: double, nullable: true}
+    unknown_value: {type: integer, format: int32, nullable: true}
+    assists: {type: integer, format: int32, nullable: true}
+    eliminations: {type: integer, format: int32, nullable: true}
+    weapon_damage: {type: integer, format: int32, nullable: true}
+    other_damage: {type: integer, format: int32, nullable: true}
+    revives: {type: integer, format: int32, nullable: true}
+    damage_taken: {type: integer, format: int32, nullable: true}
+    damage_to_structures: {type: integer, format: int32, nullable: true}
+    materials_gathered: {type: integer, format: int32, nullable: true}
+    materials_used: {type: integer, format: int32, nullable: true}

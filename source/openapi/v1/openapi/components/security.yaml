@@ -1,4 +1,4 @@
-# Shared authentication schemes used across the API.
+# Protected endpoints use the API's general Bearer JWT.
 bearerAuth:
   type: http
   scheme: bearer

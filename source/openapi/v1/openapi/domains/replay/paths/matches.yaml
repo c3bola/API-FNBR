@@ -1,162 +1,247 @@
 /matches:
   get:
-    summary: Lists matches identified in Replay files.
-    operationId: matchesGet
-    tags:
-    - Matches
+    summary: Lists matches observed in submitted Replay files.
+    description: Filters use only received match-start, playlist, and map-info values.
+    operationId: listMatches
+    tags: [Matches]
     security:
     - bearerAuth: []
     parameters:
     - in: query
-      name: seasonCode
-      schema:
-        type: string
+      name: from
+      description: Inclusive match start time in UTC.
+      schema: {type: string, format: date-time}
     - in: query
-      name: mapCode
-      schema:
-        type: string
+      name: to
+      description: Exclusive match start time in UTC; must be later than from.
+      schema: {type: string, format: date-time}
     - in: query
       name: playlist
-      schema:
-        type: string
+      schema: {type: string}
     - in: query
-      name: matchStartFrom
-      schema:
-        type: string
-        format: date-time
+      name: map_info
+      schema: {type: string}
     - in: query
-      name: matchStartTo
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    - in: query
+      name: sort_by
       schema:
         type: string
-        format: date-time
+        enum: [utc_time_started_match, replay_timestamp, game_session_id]
+        default: utc_time_started_match
+    - in: query
+      name: sort_order
+      schema: {type: string, enum: [asc, desc], default: desc}
     responses:
       '200':
-        description: Matches matching the filters.
+        description: Matches matching the supported filters.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: ../schemas/match.yaml#/Match
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/match.yaml#/Match
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
-/matches/{matchId}:
+/matches/{match_id}:
   get:
-    summary: Gets match details.
-    operationId: matchesMatchIdGet
-    tags:
-    - Matches
+    summary: Gets normalized observed match data.
+    operationId: getMatch
+    tags: [Matches]
     security:
     - bearerAuth: []
     parameters:
     - in: path
-      name: matchId
+      name: match_id
       required: true
-      schema:
-        type: integer
-        format: int64
+      schema: {type: integer, format: int64, minimum: 1}
     responses:
       '200':
-        description: Match details.
+        description: Match values observed by the parser.
         content:
           application/json:
             schema:
-              $ref: ../schemas/match.yaml#/Match
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ../schemas/match.yaml#/Match
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
-        description: Match not found.
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
-/matches/{matchId}/stats:
+/matches/{match_id}/stats:
   get:
-    summary: Gets the match-level statistics payload.
-    description: The optional matchPlayerId is included only when the stored payload references a participant.
-    operationId: matchesMatchIdStatsGet
-    tags:
-    - Matches
+    summary: Gets the match-level Stats event values.
+    description: These are not participant statistics and are not attributed to a player.
+    operationId: getMatchStats
+    tags: [Matches]
     security:
     - bearerAuth: []
     parameters:
     - in: path
-      name: matchId
+      name: match_id
       required: true
-      schema:
-        type: integer
-        format: int64
+      schema: {type: integer, format: int64, minimum: 1}
     responses:
       '200':
-        description: Match-level statistics.
+        description: Match-level statistics received from the Replay event.
         content:
           application/json:
             schema:
-              $ref: ../schemas/match.yaml#/MatchStats
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ../schemas/match.yaml#/MatchStats
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
-        description: Match or match statistics not found.
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
-/matches/{matchId}/players:
+/matches/{match_id}/players:
   get:
-    summary: Lists participants and their per-match statistics.
-    description: Team index groups participants by the recorded team value and does not imply party membership.
-    operationId: matchesMatchIdPlayersGet
-    tags:
-    - Matches
-    - Players
+    summary: Lists match participants.
+    description: Source values stay nullable when the Replay did not provide them.
+    operationId: listMatchPlayers
+    tags: [Matches, Players]
     security:
     - bearerAuth: []
     parameters:
     - in: path
-      name: matchId
+      name: match_id
       required: true
-      schema:
-        type: integer
-        format: int64
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: team_index
+      schema: {type: integer, format: int32}
+    - in: query
+      name: is_bot
+      schema: {type: boolean}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    - in: query
+      name: sort_by
+      schema: {type: string, enum: [player_number, placement, kills]}
+    - in: query
+      name: sort_order
+      schema: {type: string, enum: [asc, desc], default: asc}
     responses:
       '200':
-        description: Participants recorded for this match, including unknown identities.
+        description: Participants recorded for the requested match.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: ../schemas/matchPlayer.yaml#/MatchPlayer
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/matchPlayer.yaml#/MatchPlayer
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
-        description: Match not found.
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
 
-/matches/{matchId}/players/{matchPlayerId}:
+/matches/{match_id}/players/{match_player_id}:
   get:
-    summary: Gets a participant recorded in a match.
-    operationId: matchesMatchIdPlayersMatchPlayerIdGet
-    tags:
-    - Matches
-    - Players
+    summary: Gets one participant snapshot for a match.
+    operationId: getMatchPlayer
+    tags: [Matches, Players]
     security:
     - bearerAuth: []
     parameters:
     - in: path
-      name: matchId
+      name: match_id
       required: true
-      schema:
-        type: integer
-        format: int64
+      schema: {type: integer, format: int64, minimum: 1}
     - in: path
-      name: matchPlayerId
+      name: match_player_id
       required: true
-      schema:
-        type: integer
-        format: int64
+      schema: {type: integer, format: int64, minimum: 1}
     responses:
       '200':
-        description: Match participant and its recorded statistics.
+        description: Match-scoped participant fields and source identifiers.
         content:
           application/json:
             schema:
-              $ref: ../schemas/matchPlayer.yaml#/MatchPlayer
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ../schemas/matchPlayer.yaml#/MatchPlayer
       '401':
         $ref: ../../../components/responses.yaml#/responses/Unauthorized
       '404':
-        description: Match participant not found.
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/teams:
+  get:
+    summary: Lists match-scoped team groupings from recorded team indexes.
+    description: This does not create persistent team identities or imply a party.
+    operationId: listMatchTeams
+    tags: [Teams, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Observed team indexes and their recorded members.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ../schemas/team.yaml#/MatchTeam
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError

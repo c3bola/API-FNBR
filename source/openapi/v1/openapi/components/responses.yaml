@@ -4,28 +4,40 @@ responses:
     content:
       application/json:
         schema:
-          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse
   BadRequest:
     description: The request is invalid.
     content:
       application/json:
         schema:
-          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse
   NotFound:
     description: The requested Replay resource was not found.
     content:
       application/json:
         schema:
-          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse
   Conflict:
-    description: The request conflicts with the current Replay state.
+    description: The idempotency key already exists for a different request digest.
     content:
       application/json:
         schema:
-          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse
   InternalServerError:
     description: The server could not complete the request.
     content:
       application/json:
         schema:
-          $ref: ../domains/replay/schemas/replayError.yaml#/ReplayError
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse
+  ServiceUnavailable:
+    description: Durable persistence is unavailable; the request was not accepted.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse
+  PayloadTooLarge:
+    description: The request body exceeds the configured maximum size.
+    content:
+      application/json:
+        schema:
+          $ref: ../domains/replay/schemas/responses.yaml#/ReplayErrorResponse

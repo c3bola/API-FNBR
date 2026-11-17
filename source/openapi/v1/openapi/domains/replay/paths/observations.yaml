@@ -1,0 +1,582 @@
+/matches/{match_id}/map:
+  get:
+    summary: Gets map and world observations for a match.
+    description: POI tags are returned as observed and are not resolved to named POIs.
+    operationId: getMatchMap
+    tags: [Maps, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    responses:
+      '200':
+        description: Map grid, tags, bus paths, safe-zone centers/radii, and observed map actors.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayObject
+              - type: object
+                properties:
+                  data:
+                    $ref: ./../schemas/map.yaml#/MapSnapshot
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/map/poi-tags:
+  get:
+    summary: Lists POI tags observed in a match map.
+    description: Tags do not identify a named POI or a player visit.
+    operationId: listMatchPoiTags
+    tags: [Maps, POIs]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Ordered POI tags exactly as recorded.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items: {type: string}
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/map/safe-zones:
+  get:
+    summary: Lists safe-zone center/radius observations for a match.
+    description: Shrink-time members are not included until their exact serialized names/types are documented.
+    operationId: listMatchSafeZones
+    tags: [Safe Zones, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Recorded safe-zone coordinates and radii.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/map.yaml#/SafeZoneObservation
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/game-state-observations:
+  get:
+    summary: Lists GameState values observed over the match.
+    operationId: listGameStateObservations
+    tags: [Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Ordered source observations; repeated identical adjacent updates may already be omitted by the parser.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/snapshot.yaml#/GameStateObservationSnapshot
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/players/{match_player_id}/movement:
+  get:
+    summary: Pages through a player's Full-mode movement snapshots.
+    description: >
+      Both bounds are required and use source world seconds. Results use
+      keyset pagination; an empty page does not mean the parser observed no
+      player or that movement was read in a non-Full parse.
+    operationId: listMatchPlayerMovement
+    tags: [Players, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: path
+      name: match_player_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      required: true
+      description: Inclusive lower bound on replicated world time.
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      required: true
+      description: Exclusive upper bound on replicated world time.
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: cursor
+      description: Opaque cursor returned by the previous page.
+      schema: {type: string}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 1000, default: 500}
+    responses:
+      '200':
+        description: Bounded movement samples and an optional next cursor.
+        content:
+          application/json:
+            schema:
+              $ref: ./../schemas/observations.yaml#/MovementSamplePage
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/vehicle-observations:
+  get:
+    summary: Lists movement samples with observed vehicle references.
+    description: Returns snapshots only; vehicle entry/exit events and trips are not available.
+    operationId: listMatchVehicleObservations
+    tags: [Vehicles, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      required: true
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      required: true
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: vehicle_path
+      schema: {type: string}
+    - in: query
+      name: cursor
+      schema: {type: string}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 1000, default: 500}
+    responses:
+      '200':
+        description: Bounded samples containing vehicle actor/path/seat references.
+        content:
+          application/json:
+            schema:
+              $ref: ./../schemas/observations.yaml#/MovementSamplePage
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/weapons:
+  get:
+    summary: Lists observed weapon actor states for a match.
+    description: Weapon observations are not a complete player inventory or firing history.
+    operationId: listMatchWeapons
+    tags: [Weapons, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Weapon actors and state values received from the parser.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/observations.yaml#/WeaponObservation
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/equipped-items:
+  get:
+    summary: Lists generic equipped-item observations.
+    operationId: listMatchEquippedItems
+    tags: [Weapons, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Explicitly observed item-name/time/actor values.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/observations.yaml#/EquippedItemObservation
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/container-interactions:
+  get:
+    summary: Lists observed container and Loot Cannon interactions.
+    description: An interaction is not necessarily a chest-open event.
+    operationId: listMatchContainerInteractions
+    tags: [Containers, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: player_replay_id
+      schema: {type: integer, format: int32}
+    - in: query
+      name: processing_attempt_id
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: container_label
+      schema: {type: string}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Interaction source, actor references, observed state, and relative time.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/observations.yaml#/ContainerInteraction
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/dropped-items:
+  get:
+    summary: Lists dropped-item observations.
+    description: A dropped pickup is not proof of collection or inventory ownership.
+    operationId: listMatchDroppedItems
+    tags: [Items, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: dropped_by_player_replay_id
+      schema: {type: integer, format: int32}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Dropped item state, actor references, coordinates, and toss data.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/observations.yaml#/DroppedItemObservation
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/treasure-events:
+  get:
+    summary: Lists parser-emitted treasure events.
+    description: A treasure event is not a token classification or complete reward record.
+    operationId: listMatchTreasureEvents
+    tags: [Rewards, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: player_replay_id
+      schema: {type: integer, format: int32}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Original prize IDs and explicitly resolved actor/player references.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/observations.yaml#/TreasureEvent
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/prize-handler-grants:
+  get:
+    summary: Lists raw prize-handler grant observations.
+    description: Element IDs are returned without token or item classification.
+    operationId: listMatchPrizeHandlerGrants
+    tags: [Rewards, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: from_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: to_seconds
+      schema: {type: number, format: double, minimum: 0}
+    - in: query
+      name: player_replay_id
+      schema: {type: integer, format: int32}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Raw grant handler, element, time, and actor/player references.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/observations.yaml#/PrizeHandlerGrant
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/matches/{match_id}/processing-attempts:
+  get:
+    summary: Lists processing history for a match.
+    operationId: listMatchProcessingAttempts
+    tags: [Replay Files, Matches]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: match_id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Attempts linked to this match, with their parse modes and statuses.
+        content:
+          application/json:
+            schema:
+              allOf:
+              - $ref: ./../schemas/responses.yaml#/ReplayPage
+              - type: object
+                properties:
+                  data:
+                    items:
+                      $ref: ./../schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError

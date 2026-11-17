@@ -1,0 +1,71 @@
+ScreenTotals:
+  type: object
+  additionalProperties: false
+  required: [identified_players, matches_recorded, container_interactions_observed, treasure_events_observed]
+  properties:
+    identified_players: {type: integer, format: int64, minimum: 0}
+    matches_recorded: {type: integer, format: int64, minimum: 0}
+    container_interactions_observed:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Observed interactions, not confirmed chest openings.
+    treasure_events_observed:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Parser-emitted events, not classified tokens or rewards.
+
+ScreenPlayer:
+  type: object
+  additionalProperties: false
+  required: [position, player_id, display_name, matches_played, container_interactions_observed, treasure_events_observed]
+  properties:
+    position: {type: integer, minimum: 1}
+    player_id: {type: integer, format: int64}
+    display_name: {type: string, nullable: true}
+    matches_played: {type: integer, format: int64, minimum: 0}
+    container_interactions_observed: {type: integer, format: int64, minimum: 0}
+    treasure_events_observed: {type: integer, format: int64, minimum: 0}
+
+ScreenPlayers:
+  type: object
+  additionalProperties: false
+  required: [totals, items, total, page, page_size]
+  properties:
+    totals: {$ref: '#/ScreenTotals'}
+    items:
+      type: array
+      items: {$ref: '#/ScreenPlayer'}
+    total: {type: integer, format: int64, minimum: 0}
+    page: {type: integer, minimum: 1}
+    page_size: {type: integer, minimum: 1, maximum: 100}
+
+ScreenHome:
+  type: object
+  additionalProperties: false
+  required: [totals, observed_interaction_ranking, recent_activity]
+  properties:
+    totals: {$ref: '#/ScreenTotals'}
+    observed_interaction_ranking:
+      type: array
+      items: {$ref: '#/ScreenPlayer'}
+    recent_activity:
+      type: array
+      items: {$ref: './analytics.yaml#/AnalyticsHomeActivity'}
+
+ScreenStatistics:
+  type: object
+  additionalProperties: false
+  required: [totals, matches_by_playlist]
+  properties:
+    totals: {$ref: '#/ScreenTotals'}
+    matches_by_playlist:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [playlist, matches_recorded]
+        properties:
+          playlist: {type: string, nullable: true}
+          matches_recorded: {type: integer, format: int64, minimum: 0}

@@ -1,0 +1,53 @@
+type: object
+required:
+  - id
+  - display_name
+  - event_type
+  - description
+  - timestamp
+properties:
+  id:
+    type: string
+    description: Identificador persistido da interação de baú, representado como texto.
+  epic_id:
+    type: string
+    nullable: true
+  display_name:
+    type: string
+    nullable: true
+  avatar_url:
+    type: string
+    nullable: true
+  event_type:
+    type: string
+    enum:
+      - chest_opened
+      - token_found
+      - treasure_found
+  description:
+    type: string
+    description: Mensagem formatada da ação. Ex "abriu 42 baús em uma partida."
+  quantity:
+    type: integer
+    nullable: true
+    description: Quantidade atrelada à ação, caso o front-end precise para destacar texto.
+  timestamp:
+    type: string
+    format: date-time
+    nullable: true
+    description: Horário absoluto do evento, quando conhecido.
+  match_start_at:
+    type: string
+    format: date-time
+    nullable: true
+    description: Horário de início da partida, quando conhecido; não é o horário do evento.
+  match_id:
+    type: string
+    description: Identificador persistido da partida, representado como texto.
+  container_kind:
+    type: string
+    description: Tipo de container registrado pelo Replay.
+  event_time_seconds:
+    type: number
+    format: double
+    description: Tempo em segundos registrado pelo Replay; sua origem temporal não está especificada.

@@ -2,7 +2,10 @@
 openapi: 3.0.0
 info:
   title: Fortnite Brasil Admin API
-  description: Management API for the Fortnite Brasil Telegram bot, group, and member ecosystem.
+  description: >
+    Management API for the Fortnite Brasil ecosystem. Replay resources expose
+    normalized observations; analytics aggregate only metrics supported by the
+    persisted replay model.
   version: 1.2.0
 servers:
 - url: http://localhost:3000/api/v1
@@ -30,20 +33,34 @@ tags:
   description: Replay file metadata and processing history
 - name: Replay Ingestion
   description: Authenticated write operations for Replay file ingestion
+- name: Replay Diagnostics
+  description: Administrative ingestion timelines and data integrity metrics
 - name: Matches
   description: Fortnite matches and match participants
 - name: Players
   description: Player identities and per-match statistics
 - name: Containers
-  description: Replay-observed containers and interactions
+  description: Replay-observed container interactions
 - name: Rewards
-  description: Replay-observed rewards and reward types
+  description: Raw treasure and prize-handler observations
 - name: Vehicles
-  description: Vehicle catalog and player usage summaries
+  description: Vehicle references in replicated movement samples
 - name: POIs
-  description: Points of interest and consolidated player visits
+  description: POI tags observed in map data; no named visit catalog
 - name: Safe Zones
-  description: Match storm phases
+  description: Safe-zone center and radius observations
+- name: Eliminations
+  description: Match-scoped elimination events and kill feed
+- name: Teams
+  description: Match-scoped groupings derived from recorded team indexes
+- name: Maps
+  description: Map grids, observed paths, POI tags, and map actors
+- name: Weapons
+  description: Weapon actor and equipped-item observations
+- name: Items
+  description: Dropped item observations
+- name: Analytics
+  description: Aggregates limited to persisted and explicitly identified observations
 paths:
   $ref: ./domains/all-paths.yaml#/paths
 components:

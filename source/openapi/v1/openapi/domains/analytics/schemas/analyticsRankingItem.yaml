@@ -1,0 +1,11 @@
+type: object
+required:
+  - display_name
+  - score
+properties:
+  display_name:
+    type: string
+    nullable: true
+  score:
+    type: integer
+    description: Quantidade de baús abertos pelo jogador.

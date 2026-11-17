@@ -1,0 +1,139 @@
+/admin/replays/health:
+  get:
+    summary: Reports Replay ingestion queue health and recent diagnostic events.
+    operationId: getReplayIngestionHealth
+    tags: [Replay Diagnostics]
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: Current queue state and recent stage failures or partial results.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/diagnostics.yaml#/ReplayDiagnosticsHealth
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '403':
+        description: An administrator role is required.
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/admin/replays/metrics:
+  get:
+    summary: Returns ingestion and container-interaction metrics from PostgreSQL.
+    operationId: getReplayIngestionMetrics
+    tags: [Replay Diagnostics]
+    security:
+    - bearerAuth: []
+    responses:
+      '200':
+        description: Aggregated attempt, queue, duration, and container persistence metrics.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/diagnostics.yaml#/ReplayDiagnosticsMetrics
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '403':
+        description: An administrator role is required.
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/admin/replays/attempts:
+  get:
+    summary: Lists Replay processing attempts with optional filters.
+    operationId: listReplayDiagnosticAttempts
+    tags: [Replay Diagnostics]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: query
+      name: status
+      schema: {type: string, enum: [accepted, processing, succeeded, failed, skipped]}
+    - in: query
+      name: file_sha256
+      schema: {type: string, pattern: '^[a-f0-9]{64}$'}
+    - in: query
+      name: from
+      schema: {type: string, format: date-time}
+    - in: query
+      name: to
+      schema: {type: string, format: date-time}
+    - in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    - in: query
+      name: page_size
+      schema: {type: integer, minimum: 1, maximum: 100, default: 25}
+    responses:
+      '200':
+        description: Attempts ordered by receipt time.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/diagnostics.yaml#/ReplayDiagnosticAttemptPage
+      '400':
+        $ref: ../../../components/responses.yaml#/responses/BadRequest
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '403':
+        description: An administrator role is required.
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/admin/replays/attempts/{id}:
+  get:
+    summary: Gets an attempt and its durable processing timeline.
+    operationId: getReplayDiagnosticAttempt
+    tags: [Replay Diagnostics]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    responses:
+      '200':
+        description: Attempt identifiers, stage timings, metrics, and errors without the raw payload.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/diagnostics.yaml#/ReplayDiagnosticAttemptDetail
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '403':
+        description: An administrator role is required.
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError
+
+/admin/replays/attempts/{id}/containers:
+  get:
+    summary: Diagnoses normalized and persisted container interactions for an attempt.
+    operationId: getReplayDiagnosticContainers
+    tags: [Replay Diagnostics]
+    security:
+    - bearerAuth: []
+    parameters:
+    - in: path
+      name: id
+      required: true
+      schema: {type: integer, format: int64, minimum: 1}
+    responses:
+      '200':
+        description: Parser snapshot counts, normalization findings, database counts, and capped event samples.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/diagnostics.yaml#/ReplayContainerDiagnostics
+      '401':
+        $ref: ../../../components/responses.yaml#/responses/Unauthorized
+      '403':
+        description: An administrator role is required.
+      '404':
+        $ref: ../../../components/responses.yaml#/responses/NotFound
+      '500':
+        $ref: ../../../components/responses.yaml#/responses/InternalServerError

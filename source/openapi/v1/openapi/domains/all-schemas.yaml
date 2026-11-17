@@ -126,8 +126,20 @@ schemas:
   ReplayError:
     $ref: ./replay/schemas/replayError.yaml#/ReplayError
 
-  ReplayFileRegistration:
-    $ref: ./replay/schemas/replayFile.yaml#/ReplayFileRegistration
+  ReplayErrorResponse:
+    $ref: ./replay/schemas/responses.yaml#/ReplayErrorResponse
+
+  Pagination:
+    $ref: ./replay/schemas/responses.yaml#/Pagination
+
+  ReplayPage:
+    $ref: ./replay/schemas/responses.yaml#/ReplayPage
+
+  ReplayObject:
+    $ref: ./replay/schemas/responses.yaml#/ReplayObject
+
+  ReplayEnvelope:
+    $ref: ./replay/schemas/responses.yaml#/ReplayEnvelope
 
   ReplayProcessingAttempt:
     $ref: ./replay/schemas/replayProcessingAttempt.yaml#/ReplayProcessingAttempt
@@ -138,38 +150,8 @@ schemas:
   ReplayAnalyzerVersionInput:
     $ref: ./replay/schemas/ingestion.yaml#/ReplayAnalyzerVersionInput
 
-  MatchIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/MatchIngestion
-
-  MatchPlayerIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/MatchPlayerIngestion
-
-  MatchStatsIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/MatchStatsIngestion
-
-  ContainerIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/ContainerIngestion
-
-  ContainerInteractionIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/ContainerInteractionIngestion
-
-  RewardIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/RewardIngestion
-
-  VehicleUsageIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/VehicleUsageIngestion
-
-  POIIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/POIIngestion
-
-  POIVisitIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/POIVisitIngestion
-
-  SafeZonePhaseIngestion:
-    $ref: ./replay/schemas/ingestion.yaml#/SafeZonePhaseIngestion
-
-  AnalyzerVersion:
-    $ref: ./replay/schemas/replayProcessingAttempt.yaml#/AnalyzerVersion
+  ReplayData:
+    $ref: ./replay/schemas/snapshot.yaml#/ParserReplayData
 
   Match:
     $ref: ./replay/schemas/match.yaml#/Match
@@ -186,29 +168,87 @@ schemas:
   PlayerMatchStats:
     $ref: ./replay/schemas/matchPlayer.yaml#/PlayerMatchStats
 
-  Container:
-    $ref: ./replay/schemas/container.yaml#/Container
-
   ContainerInteraction:
-    $ref: ./replay/schemas/container.yaml#/ContainerInteraction
+    $ref: ./replay/schemas/observations.yaml#/ContainerInteraction
 
-  Reward:
-    $ref: ./replay/schemas/reward.yaml#/Reward
+  ReplayDiagnosticAttemptSummary:
+    $ref: ./replay/schemas/diagnostics.yaml#/ReplayDiagnosticAttemptSummary
+  ReplayDiagnosticAttemptPage:
+    $ref: ./replay/schemas/diagnostics.yaml#/ReplayDiagnosticAttemptPage
+  ReplayDiagnosticAttemptDetail:
+    $ref: ./replay/schemas/diagnostics.yaml#/ReplayDiagnosticAttemptDetail
+  ReplayDiagnosticsHealth:
+    $ref: ./replay/schemas/diagnostics.yaml#/ReplayDiagnosticsHealth
+  ReplayDiagnosticsMetrics:
+    $ref: ./replay/schemas/diagnostics.yaml#/ReplayDiagnosticsMetrics
+  ReplayContainerDiagnostics:
+    $ref: ./replay/schemas/diagnostics.yaml#/ReplayContainerDiagnostics
 
-  RewardType:
-    $ref: ./replay/schemas/reward.yaml#/RewardType
+  MatchTeam:
+    $ref: ./replay/schemas/team.yaml#/MatchTeam
 
-  Vehicle:
-    $ref: ./replay/schemas/vehicle.yaml#/Vehicle
+  EventElimination:
+    $ref: ./replay/schemas/elimination.yaml#/EventElimination
 
-  PlayerVehicleUsage:
-    $ref: ./replay/schemas/vehicle.yaml#/PlayerVehicleUsage
+  KillFeedEntry:
+    $ref: ./replay/schemas/elimination.yaml#/KillFeedEntry
 
-  POI:
-    $ref: ./replay/schemas/poi.yaml#/POI
+  MapSnapshot:
+    $ref: ./replay/schemas/map.yaml#/MapSnapshot
 
-  PlayerPOIVisit:
-    $ref: ./replay/schemas/poi.yaml#/PlayerPOIVisit
+  MovementSample:
+    $ref: ./replay/schemas/observations.yaml#/MovementSample
 
-  SafeZonePhase:
-    $ref: ./replay/schemas/safeZonePhase.yaml#/SafeZonePhase
+  MovementSamplePage:
+    $ref: ./replay/schemas/observations.yaml#/MovementSamplePage
+
+  WeaponObservation:
+    $ref: ./replay/schemas/observations.yaml#/WeaponObservation
+
+  EquippedItemObservation:
+    $ref: ./replay/schemas/observations.yaml#/EquippedItemObservation
+
+  DroppedItemObservation:
+    $ref: ./replay/schemas/observations.yaml#/DroppedItemObservation
+
+  TreasureEvent:
+    $ref: ./replay/schemas/observations.yaml#/TreasureEvent
+
+  PrizeHandlerGrant:
+    $ref: ./replay/schemas/observations.yaml#/PrizeHandlerGrant
+
+  AnalyticsOverview:
+    $ref: ./analytics/schemas/analytics.yaml#/AnalyticsOverview
+
+  AnalyticsOverviewMetric:
+    $ref: ./analytics/schemas/analytics.yaml#/AnalyticsOverviewMetric
+
+  AnalyticsActivityItem:
+    $ref: ./analytics/schemas/analytics.yaml#/AnalyticsActivityItem
+
+  AnalyticsRankingItem:
+    $ref: ./analytics/schemas/analytics.yaml#/AnalyticsRankingItem
+
+  PlayerAnalyticsSummary:
+    $ref: ./analytics/schemas/analytics.yaml#/PlayerAnalyticsSummary
+
+  PlayerAnalyticsHistoryItem:
+    $ref: ./analytics/schemas/analytics.yaml#/PlayerAnalyticsHistoryItem
+
+  PlayerComparison:
+    $ref: ./analytics/schemas/analytics.yaml#/PlayerComparison
+
+  ContainerAnalytics:
+    $ref: ./analytics/schemas/analytics.yaml#/ContainerAnalytics
+
+  TreasureEventAnalytics:
+    $ref: ./analytics/schemas/analytics.yaml#/TreasureEventAnalytics
+
+  PrizeHandlerGrantAnalytics:
+    $ref: ./analytics/schemas/analytics.yaml#/PrizeHandlerGrantAnalytics
+
+  VehicleObservationAnalytics:
+    $ref: ./analytics/schemas/analytics.yaml#/VehicleObservationAnalytics
+
+  SafeZoneAnalytics:
+    $ref: ./analytics/schemas/analytics.yaml#/SafeZoneAnalytics

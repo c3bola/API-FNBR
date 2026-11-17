@@ -1,0 +1,14 @@
+type: object
+properties:
+  total_chests_opened:
+    type: integer
+    description: Total de baús abertos globalmente.
+  total_players:
+    type: integer
+    description: Total de jogadores monitorados.
+  total_treasures_found:
+    type: integer
+    description: Total de tesouros encontrados.
+  total_tokens_found:
+    type: integer
+    description: Total de tokens encontrados.
