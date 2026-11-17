@@ -3,14 +3,14 @@
 import 'reflect-metadata';
 import app from './apifnbr';
 import { testDatabaseConnection, pool } from './infra/database/postgres.config'; 
-import { registerReplayIngestion } from './modules/replays/replays.bootstrap';
+import { registerReplayIngestion, stopReplayIngestion } from './modules/replays/replays.bootstrap';
 import express from 'express';
 import path from 'path';
 const PORT = process.env.PORT || 3000;
 
 async function bootstrap() {
   await testDatabaseConnection();
-  await registerReplayIngestion(app);
+  await registerReplayIngestion(app, true);
 
   const server = app.listen(PORT, () => {
     console.log(`[Server] Aplicação rodando na porta ${PORT}`);
@@ -24,6 +24,7 @@ async function bootstrap() {
       console.log('[Server] Servidor HTTP fechado. Recusando novas requisições.');
 
       try {
+        await stopReplayIngestion();
         await pool.end();
         console.log('[Database] Pool de conexões do PostgreSQL encerrado.');
         process.exit(0);
